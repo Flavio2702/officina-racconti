@@ -1,0 +1,6 @@
+interface:
+  display_name: "Racconto · scrittura"
+  short_description: "Raccordi, varianti e abbozzi nella voce del racconto"
+  default_prompt: "Usa $racconto-scrittura per scrivere un raccordo nel racconto."
+policy:
+  allow_implicit_invocation: false

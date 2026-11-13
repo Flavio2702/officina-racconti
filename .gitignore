@@ -1,0 +1,42 @@
+# Contenuti degli autori: pubblicare solo il modello vuoto.
+/racconti/*
+!/racconti/_modello/
+/racconti/_modello/*
+!/racconti/_modello/scheda.md
+!/racconti/_modello/stato.md
+/voce/
+/bozze/
+/archivio/
+/strumenti/stilemi_extra.txt
+
+# Credenziali, configurazioni locali e cronologie degli assistenti.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+*token*.json
+/.claude/*
+!/.claude/skills/
+/.codex/
+/.agents/*
+!/.agents/skills/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.local.md
+AGENTS.override.md
+.mcp.json
+.vscode/
+.idea/
+
+# Esportazioni personali e cache.
+*.docx
+*.pdf
+*.zip
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,2 @@
+# Personalizzazioni locali, una espressione regolare Python per riga.
+# Le righe che iniziano con # sono commenti. Nessuna formula personale preimpostata.

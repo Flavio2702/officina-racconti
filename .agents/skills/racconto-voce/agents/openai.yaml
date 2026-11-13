@@ -1,0 +1,6 @@
+interface:
+  display_name: "Racconto · voce"
+  short_description: "Profilo di voce dai racconti consolidati"
+  default_prompt: "Usa $racconto-voce per aggiornare il profilo di voce."
+policy:
+  allow_implicit_invocation: false

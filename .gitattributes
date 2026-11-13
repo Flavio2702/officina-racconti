@@ -1,0 +1,3 @@
+# Copie, report e materiali dei racconti restano in LF anche su Windows:
+# lo SHA-256 dei byte di testo.md collega i report alla copia esaminata.
+racconti/**/*.md text eol=lf
