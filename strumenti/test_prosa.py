@@ -395,7 +395,7 @@ class ProsaTest(unittest.TestCase):
     def test_fonte_assoluta_e_senza_fonti(self):
         percorso = self.radice / "città nuova.txt"
         self.scrivi("scheda.md", f"---\nfonte_file: '{percorso}'\nmodalita: breve\n---\n")
-        self.assertEqual(json.loads(self.cattura(prosa.cmd_fonte, str(self.cartella)))["fonte_file"], str(percorso))
+        self.assertEqual(json.loads(self.cattura(prosa.cmd_fonte, str(self.cartella)))["fonte_file"], str(percorso.resolve()))
         self.scheda("breve")
         self.assertEqual(json.loads(self.cattura(prosa.cmd_fonte, str(self.cartella))),
                          {"doc": "", "fonte_file": "", "modalita": "breve"})

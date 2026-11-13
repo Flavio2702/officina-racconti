@@ -40,7 +40,7 @@ class DistribuzioneTest(unittest.TestCase):
         scheda.write_text(re.sub(r'(?m)^fonte_file:.*$', 'fonte_file: esempi/il-faro.md',
                                 scheda.read_text(encoding='utf-8')), encoding='utf-8')
         fonte = json.loads(self.comando('strumenti/prosa.py', 'fonte', 'il-faro'))
-        self.assertEqual(Path(fonte['fonte_file']), self.radice / 'esempi/il-faro.md')
+        self.assertEqual(Path(fonte['fonte_file']), (self.radice / 'esempi/il-faro.md').resolve())
         self.comando('strumenti/prosa.py', 'importa', 'esempi/il-faro.md', 'il-faro')
         self.assertIn('Battute', self.comando('strumenti/prosa.py', 'conta', 'il-faro'))
         self.assertIn('# Controlli', self.comando('strumenti/prosa.py', 'controlla', 'il-faro'))

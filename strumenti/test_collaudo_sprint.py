@@ -49,7 +49,7 @@ class CollaudoSprint(unittest.TestCase):
         dati = dati.replace("fonte_file:              #", f'fonte_file: "{fonte.relative_to(self.radice).as_posix()}" #')
         scheda.write_text(dati, encoding="utf-8")
         fonte_dichiarata = json.loads(self.comando("fonte", nome))
-        self.assertEqual(fonte_dichiarata["fonte_file"], str(fonte))
+        self.assertEqual(fonte_dichiarata["fonte_file"], str(fonte.resolve()))
         self.assertEqual(fonte_dichiarata["modalita"], modalita)
         self.comando("importa", fonte, nome)
         return cartella, fonte
