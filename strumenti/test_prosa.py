@@ -1617,6 +1617,12 @@ class VoceTest(unittest.TestCase):
             self.cattura(prosa.main, ["prosa.py", "conta", str(c), "--finestra", "20"])
         self.assertIn("solo con «deriva»", err.getvalue())
 
+    def test_deriva_senza_corpus_usa_le_zone_del_racconto(self):
+        c = self.racconto("bozza", prosa_sintetica(11, 150) + "\n", stato="stesura")
+        report = self.cattura(prosa.cmd_deriva, str(c), 20)
+        self.assertIn("contro le finestre delle zone senza coincidenze dello stesso racconto", report)
+        self.assertNotIn("del zone", report)
+
     def test_aiuto_elenca_voce_e_deriva(self):
         aiuto = self.cattura(prosa.main, ["prosa.py", "aiuto"])
         for comando in ("voce [--salva]", "deriva <racconto>", "--finestra", "voce/misure/"):

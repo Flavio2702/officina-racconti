@@ -1891,16 +1891,16 @@ def cmd_deriva(racconto, n=FINESTRA_DERIVA):
     marcatori = marcatori_voce()
     corpo = [s for segs in corpus["autore"].values() for s in segs]
     rif = Riferimento(corpo, n)
-    origine = "corpus di voce"
+    origine = "del corpus di voce"
     if not rif.basta() or len(rif.delta_propri()) < MIN_FINESTRE:
         rif = Riferimento(zona_autore(fr) if quota_racconto(fr) <= SOGLIA_INTERO else [], n)
-        origine = "zone senza coincidenze dello stesso racconto"
+        origine = "delle zone senza coincidenze dello stesso racconto"
     out = []
     w = out.append
     w(f"# Deriva: {cartella.name} ({oggi()})\n")
     w(identita_report(cartella, dati))
     w(f"Finestra mobile di almeno {n} parole a frasi intere, una ogni mezza finestra circa, lungo tutto il "
-      f"testo (rolling stylometry [F62]). Ogni finestra si legge contro le finestre del {origine}, "
+      f"testo (rolling stylometry [F62]). Ogni finestra si legge contro le finestre {origine}, "
       "senza quelle che la toccano. Non dice chi ha scritto una finestra: dice dove la prosa esce dalla "
       "variazione osservata (officina/stilometria.md).\n")
     if not rif.basta() or len(rif.delta_propri()) < MIN_FINESTRE:
