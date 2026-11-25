@@ -22,7 +22,7 @@ Tratti discussi per i testi in italiano prodotti da modelli linguistici [F32][F3
 - **Virgola seriale anche prima della *e***.
 - **Ripetitività**: le stesse strutture di frase tornano più spesso che in un testo umano.
 
-`prosa.py confronta` misura alcuni segnali locali (gerundi, connettivi, *non solo… ma*, ritmo) nel passaggio nuovo rispetto al resto del racconto. Le soglie dello script sono euristiche locali, non soglie scientifiche né una certificazione della voce dell'autore. Sotto le 80 parole le frequenze sono poco affidabili; il confronto con gli esempi approvati resta qualitativo. Uno scarto può servire al passaggio.
+`prosa.py confronta` misura alcuni segnali locali (gerundi, connettivi, terne del tipo *parola, parola e parola*, *non solo… ma*, ritmo) nel passaggio nuovo rispetto al resto del racconto. Il registro d'ufficio, le figure di repertorio e la punteggiatura estranea alla voce sono trattati in `lessico-e-figure.md` e `punteggiatura-e-ritmo.md`. Le soglie dello script sono euristiche locali, non soglie scientifiche né una certificazione della voce dell'autore. Sotto le 80 parole le frequenze sono poco affidabili; il confronto con gli esempi approvati resta qualitativo. Uno scarto può servire al passaggio.
 
 ## 2. Difetti narrativi dei modelli (mestiere)
 

@@ -15,7 +15,7 @@ L'autore scrive il racconto. Questa skill scrive solo quello che lui chiede, dov
 2. **Il bando.** Leggi `ia_bando` e `destinazione`. Con `vietata` o `da verificare`, e con campo vuoto e `destinazione: concorso`, non bloccarti: prima di scrivere dai all'autore un avviso breve e fattuale (il campo, la regola del bando se nota, che la conferma andrà nello stato e il materiale sarà marcato) e chiedi una conferma esplicita, una per compito, non per frase. Registra la conferma in `stato.md`, **Decisioni**, con data, compito e perimetro; mai nella scheda.
 3. Acquisisci la fonte e rigenera la copia come in `AGENTS.md`; per un abbozzo senza testo salta acquisizione, ancora e confronti, dichiarandone il limite.
 4. Il punto esatto lo indica l'autore citando una frase del testo; se la citazione non si trova o è ambigua, chiedi.
-5. Leggi i tre o quattro capoversi prima e dopo il punto (tempo, distanza, fatti), poi `voce/profilo.md` (se provvisorio o sottile conta poco) e `officina/difetti-ai.md`, per sapere cosa evitare.
+5. Leggi i tre o quattro capoversi prima e dopo il punto (tempo, distanza, fatti), poi `voce/profilo.md` (se provvisorio o sottile conta poco), `officina/difetti-ai.md` e `officina/lessico-e-figure.md`, per sapere cosa evitare.
 6. **L'ancora di voce.** I brani approvati in `voce/esempi.md` hanno la precedenza. Finché il file non ne ha, scegli due o tre capoversi dello stesso racconto vicini al punto o dello stesso tipo (dialogo, svolta, descrizione), con provenienza zero: esegui `python -X utf8 strumenti/prosa.py provenienza <nome>` ed escludi i capoversi che elenca (la misura vede solo i materiali marcati: dichiaralo). Un capoverso vicino al punto che coincide con prosa dell'assistente vale come contesto, non come voce. Dichiara all'autore quali capoversi hai usato (numero e prime parole).
 
 ## Modi
@@ -33,13 +33,14 @@ Chiedi quale, se l'autore non lo dice.
 - **Non chiudere quello che il testo lascia aperto** (**Taciuto**).
 - **Niente commento emotivo**, né emozioni nominate dove il testo intorno le mostra (`officina/difetti-ai.md`, parte 2).
 - **Stessa grammatica del testo**: tempo, persona, distanza psichica, la convenzione dei dialoghi che la bozza usa in quel punto (in stesura anche la lineetta).
+- **Stessa lingua del testo**: punteggiatura, registro e figure come nei capoversi intorno e nella sezione «Cosa non fai mai» del profilo; niente punto e virgola, puntini o esclamativi che la voce non usa, nessuna parola d'ufficio, figure solo dal mondo di chi guarda (`officina/punteggiatura-e-ritmo.md`, `officina/lessico-e-figure.md`).
 - **Lunghezza**: quella chiesta, altrimenti la più breve che fa il lavoro.
 
 ### Il controllo prima di mostrare
 
 1. Scrivi il passaggio in `racconti/<nome>/materiali/_passaggio.md` ed esegui `python -X utf8 strumenti/prosa.py confronta racconti/<nome>/materiali/_passaggio.md <nome>`.
 2. Valuta gli scarti (ritmo, gerundi in coda, connettivi, formule) rispetto alla funzione del passaggio e all'ancora: `confronta` paragona al resto del racconto, non certifica la voce dell'autore, e sotto le 80 parole conta soprattutto il contesto. Conserva uno scarto motivato (un finale che cambia ritmo); riscrivi solo se contraddice il compito o l'effetto.
-3. **Passata di sottrazione.** Rileggi con la tavola LAMP (`officina/difetti-ai.md`, parte 4) [F38] e con **Taciuto**. Puoi solo togliere, o sostituire con qualcosa di più semplice: niente aggiunte, nessun ornamento al posto di un cliché. Al massimo due giri.
+3. **Passata di sottrazione.** Rileggi con la tavola LAMP (`officina/difetti-ai.md`, parte 4) [F38] e con **Taciuto**; togli anche gli accumuli di figure e le parole d'ufficio. Puoi solo togliere, o sostituire con qualcosa di più semplice: niente aggiunte, nessun ornamento al posto di un cliché. Al massimo due giri.
 4. Mostra all'autore il passaggio, il punto esatto, l'ancora usata e, in una riga ciascuno, gli scarti conservati o rivisti e cosa la sottrazione ha tolto e perché.
 
 ## Il risultato

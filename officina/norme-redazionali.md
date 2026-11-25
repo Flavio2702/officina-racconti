@@ -45,6 +45,27 @@ Le scelte personali sono in `voce/scelte-redazionali.md`, creato da `strumenti/p
 
 La d eufonica davanti a vocale diversa (*ad esempio*, *ed io*) è diffusa: la Crusca raccomanda di limitarla [F8], ma in narrativa può essere una scelta di ritmo. La revisione la segnala, non la corregge.
 
+## Punteggiatura nella narrazione
+
+Il quadro completo, con le scelte di stile, è in `punteggiatura-e-ritmo.md`. Qui i casi che la redazione segnala.
+
+| Caso | Indicazione | Fonte |
+| --- | --- | --- |
+| virgola tra soggetto e verbo, tra verbo e oggetto | non si mette; un inciso chiuso da due virgole è corretto | [F7] |
+| virgola tra il verbo e la sua oggettiva (*ho capito, che*) | non si mette: la revisione la segnala, l'autore decide caso per caso | [F42] |
+| dislocazione a destra con ripresa del pronome (*lo so, che*) | la virgola è corretta: non è il caso precedente | [F49] |
+| relative appositive / restrittive | virgole con le prime, senza con le seconde: cambiano il senso | [F42] |
+| segni doppi (`!!`, `?!`) | da guardare: enfasi da usare con misura | [F44] |
+
+## Lessico di norma
+
+- *Piuttosto che* per «o»: da evitare nella narrazione; in battuta può caratterizzare [F51]. Lo script lo segnala, il modello distingue la preferenza dalla disgiunzione.
+- *Gli* per *a lei*: errore [F13]. *Gli* per *a loro*: corretto.
+
+## Italiano dell'uso medio: non è errore
+
+Nella voce di un narratore che parla e nelle battute non si correggono i tratti dell'italiano dell'uso medio [F49]: *lui/lei/loro* soggetto, dislocazioni, frasi scisse, *che* polivalente, imperfetto ipotetico e di cortesia, *ci* con *avere*, *gli* dativo plurale, *ma però*. L'elenco con gli esempi è in `lessico-e-figure.md`. In una narrazione esterna e sorvegliata lo stesso tratto è un segnale di registro: si chiede.
+
 ## Tempi verbali nella narrazione
 
 - **Passato remoto e imperfetto** si dividono il lavoro: il remoto porta gli eventi in primo piano, l'imperfetto lo sfondo. Alternarli è tecnica, non errore [F14].
@@ -61,6 +82,6 @@ La d eufonica davanti a vocale diversa (*ad esempio*, *ed io*) è diffusa: la Cr
 
 ## Cosa controlla lo script e cosa il modello
 
-Lo script (`prosa.py controlla`) segnala forme che corrispondono ai suoi modelli: alcuni accenti dell'elenco, *po'* accentato, *qual'è*, *E'*, due puntini isolati o quattro e più, e certi spazi. I numeri decimali non sono trattati come sospensioni. La divisione in frasi, l'esclusione dei dialoghi, i possibili filtri, gli echi e i nomi simili sono approssimazioni: possono perdere casi e generare falsi positivi. Il conteggio dei segni di dialogo non certifica la coerenza della convenzione. Gli echi confrontano prefissi di sei lettere, non forme morfologiche: `casa/case` può sfuggire. Le parole ricorrenti dichiarate nella scheda restano nelle frequenze descrittive ma sono escluse dalle segnalazioni di eco.
+Lo script (`prosa.py controlla`) segnala forme che corrispondono ai suoi modelli: alcuni accenti dell'elenco, *po'* accentato, *qual'è*, *E'*, due puntini isolati o quattro e più, e certi spazi. Segnala anche, come candidati, la virgola tra un verbo di dire, pensare o sapere e il suo *che* (esclusa la ripresa del pronome), i segni doppi e, nella sola narrazione, *piuttosto che* e l'antilingua. Un inciso che si chiude su uno di quei verbi (*è lui, dice, che…*) esce anche lui: va letto. I numeri decimali non sono trattati come sospensioni. La divisione in frasi, l'esclusione dei dialoghi, i possibili filtri, gli echi e i nomi simili sono approssimazioni: possono perdere casi e generare falsi positivi. Il conteggio dei segni di dialogo non certifica la coerenza della convenzione. Gli echi confrontano prefissi di sei lettere, non forme morfologiche: `casa/case` può sfuggire. Le parole ricorrenti dichiarate nella scheda restano nelle frequenze descrittive ma sono escluse dalle segnalazioni di eco.
 
-Il modello, al livello di redazione, controlla quello che le espressioni regolari sbaglierebbero: tempi verbali, *gli* per *le*, consecutio, d eufonica in contesto, coerenza delle scelte di questa pagina.
+Il modello, al livello di redazione, controlla quello che le espressioni regolari sbaglierebbero: tempi verbali, *gli* per *le*, consecutio, d eufonica in contesto, virgola tra soggetto e verbo, relative, *piuttosto che* in contesto, coerenza delle scelte di questa pagina. Non corregge i tratti dell'uso medio.

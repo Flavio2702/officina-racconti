@@ -15,6 +15,9 @@ La domanda: il testo è corretto e coerente? Riferimento: `officina/norme-redazi
 - **Tempi verbali**: lo stesso episodio passato ora al passato prossimo ora al remoto; passaggi tra presente e passato senza funzione; sequenze tutte all'imperfetto dove si perde l'ordine dei fatti.
 - **Pronomi**: *gli* per *le*.
 - **d eufonica** davanti a vocale diversa: segnala, non correggere.
+- **Virgola nel nucleo**: tra soggetto e verbo, verbo e oggetto, verbo e oggettiva [F42]; i candidati dello script vanno letti, perché incisi e dislocazioni con ripresa del pronome sono corretti. Relative appositive e restrittive.
+- ***Piuttosto che***: preferenza o «o»? Solo il secondo caso, nella narrazione, è da segnalare.
+- **Uso medio**: i tratti elencati in `officina/norme-redazionali.md` non sono errori nella voce parlata e nelle battute.
 - **Consecutio** e concordanze.
 - **Coerenza delle scelte**: *sé stesso* o *se stesso*, apostrofo, virgolette per le citazioni dentro le battute.
 

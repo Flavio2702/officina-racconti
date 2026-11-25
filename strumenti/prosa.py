@@ -131,6 +131,60 @@ REFUSI = [
     (r"(?<=\w)“(?=[\s.,;:!?]|$)", "virgoletta di apertura “ usata in chiusura"),
 ]
 
+# Virgola tra il verbo e la sua oggettiva: norma della raccolta, segnalata come candidato
+# (officina/punteggiatura-e-ritmo.md, [F42][F7]). L'elenco dei verbi è dell'officina.
+VERBI_OGGETTIVA = (
+    r"capit[oaie]|capisco|capiva|capivo|cap[ìi]|so|sai|sa|sapevo|sapeva|seppi|seppe|"
+    r"penso|pensa|pensavo|pensava|pensato|pens[òo]|pensai|credo|crede|credevo|credeva|creduto|"
+    r"dico|dice|dicevo|diceva|detto|dissi|disse|spero|spera|speravo|sperava|"
+    r"ammetto|ammette|ammesso|immagino|immagina|immaginavo|immaginato|scoperto|scoperta|"
+    r"accorto|accorta|ricordo|ricorda|ricordavo|temo|temevo|direi|sembra|sembrava|pare|pareva"
+)
+# Con la ripresa del pronome («lo so, che…», «l'ho capito, che…») la virgola segna una
+# dislocazione a destra dell'uso medio [F49], non la virgola nel nucleo: si esclude.
+RIPRESA = "".join(rf"(?<!{r})" for r in (
+    r"\blo ", r"\bl['’]", r"\bl['’]ho ", r"\bl['’]ha ", r"\bl['’]hai ", r"\bl['’]avevo ", r"\bl['’]aveva ",
+))
+RE_VIRGOLA_OGGETTIVA = re.compile(RIPRESA + r"\b(?:" + VERBI_OGGETTIVA + r"),[ \t]+che\b", re.IGNORECASE)
+REFUSI += [
+    (RE_VIRGOLA_OGGETTIVA.pattern,
+     "candidato: virgola tra il verbo e la sua oggettiva [F42][F7]"),
+    (r"(?:\\?[!?]){2,}", "segni doppi (!!, ?!): enfasi da usare con misura [F44]"),
+]
+
+# Antilingua e burocratese nella narrazione (officina/lessico-e-figure.md: Calvino [F53],
+# elenco di osservazione). Nelle battute possono caratterizzare chi parla: non si cercano.
+ANTILINGUA = [
+    r"effettu(?:are|ato|ata|ati|ate|ava|avo|ò|ai|ando|a|o)",
+    r"proced(?:ere|uto|eva|evo|o|e|ette|etti) (?:al|allo|alla|all['’]|ai|agli|alle)",
+    r"provved(?:ere|uto|eva|evo|o|e|ette|etti) (?:a|al|allo|alla|all['’]|ai|agli|alle)",
+    r"nel momento in cui", r"a livello (?:di|del|dello|della|dei|degli|delle)",
+    r"in merito (?:a|al|allo|alla|ai|agli|alle)", r"al fine di", r"in ordine (?:a|al|alla)",
+    r"risulta(?:va|to|ta|no|vano)? essere", r"(?:il|lo|la|i|gli|le) medesim[oaie]",
+    r"suddett[oaie]", r"espleta\w*", r"usufru\w*", r"in data (?:odierna|di)",
+    r"nella fattispecie", r"onde (?:evitare|poter|permettere|consentire)",
+]
+RE_ANTILINGUA = re.compile(r"\b(?:" + "|".join(ANTILINGUA) + r")\b", re.IGNORECASE)
+RE_PIUTTOSTO_CHE = re.compile(r"\bpiuttosto che\b", re.IGNORECASE)
+
+# Similitudini esplicite: si segnalano solo gli accumuli (officina/lessico-e-figure.md).
+RE_SIMILITUDINE = re.compile(
+    r"\bcome se\b|\bcome (?:un|uno|una|il|lo|la|i|gli|le)\b|\bcome (?:un|l)['’]|"
+    r"\bsimil[ei] a\b|\b(?:sembra|sembrava|sembravano|pare|pareva) (?:un|uno|una)\b|"
+    r"\b(?:sembra|sembrava|pare|pareva) un['’]",
+    re.IGNORECASE,
+)
+SIMILITUDINI_CAPOVERSO = (3, 120)  # tre similitudini entro 120 parole dello stesso capoverso
+
+# Ritmo locale (officina/punteggiatura-e-ritmo.md): soglie euristiche dell'officina.
+UNIFORMI_FRASI = 6       # frasi consecutive di narrazione...
+UNIFORMI_SCARTO = 4      # ...la cui lunghezza resta entro questo scarto in parole
+ATTACCHI_MINIMO = 3      # frasi consecutive di narrazione con la stessa prima parola
+ARTICOLI = {"il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "l"}
+
+# Terne «parola, parola e parola»: segnale di parte 1 di officina/difetti-ai.md.
+RE_TERNA = re.compile(rf"\b[{LETTERE}]+, [{LETTERE}]+ e [{LETTERE}]+\b")
+
 
 # --------------------------------------------------------------------------- utilità
 
@@ -419,6 +473,103 @@ def togli_dialoghi(testo):
     t = re.sub(r'"[^"\n]*"', " ", t)
     righe = [r for r in t.splitlines() if not re.match(r"^\s*(—|–|-)\s?\S", r)]
     return "\n".join(righe)
+
+
+def maschera_dialoghi(testo):
+    """Come togli_dialoghi, ma a lunghezza costante: le posizioni restano quelle del testo."""
+    def vuota(m):
+        return re.sub(r"[^\n]", " ", m.group(0))
+    t = re.sub(r"«[^»]*»", vuota, testo)
+    t = re.sub(r"“[^”]*”", vuota, t)
+    t = re.sub(r'"[^"\n]*"', vuota, t)
+    return re.sub(r"(?m)^[ \t]*(?:—|–|-)[ \t]?\S.*$", vuota, t)
+
+
+RE_CONFINE_FRASE = re.compile(r"(?<=[.!?…])[»”\"]?\s+(?=[«“\"—–\-]?\s?[A-ZÀ-Ý])")
+
+
+def frasi_posizionate(testo):
+    """Frasi con la posizione d'inizio nel testo; stessi confini di frasi()."""
+    out, inizio = [], 0
+    for m in RE_CONFINE_FRASE.finditer(testo):
+        out.append((inizio, testo[inizio:m.start()]))
+        inizio = m.end()
+    out.append((inizio, testo[inizio:]))
+    return [(p, f) for p, f in out if RE_PAROLA.search(f)]
+
+
+def di_dialogo(frase):
+    return bool(re.search(r"[«“\"]", frase) or re.match(r"\s*[—–-]", frase))
+
+
+def ritmo_locale(testo):
+    """Tratti di narrazione a lunghezza uniforme e attacchi di frase ripetuti."""
+    fr = frasi_posizionate(testo)
+    uniformi, attacchi = [], []
+    # Le frasi di dialogo interrompono le serie: le battute brevi in fila sono normali.
+    serie, corrente = [], []
+    for p, f in fr:
+        if di_dialogo(f):
+            if corrente:
+                serie.append(corrente)
+            corrente = []
+        else:
+            corrente.append((p, f))
+    if corrente:
+        serie.append(corrente)
+    for s in serie:
+        lung = [len(parole(f)) for _, f in s]
+        i = 0
+        while i + UNIFORMI_FRASI <= len(s):
+            finestra = lung[i:i + UNIFORMI_FRASI]
+            if max(finestra) - min(finestra) <= UNIFORMI_SCARTO:
+                j = i + UNIFORMI_FRASI
+                while j < len(s) and max(lung[i:j + 1]) - min(lung[i:j + 1]) <= UNIFORMI_SCARTO:
+                    j += 1
+                uniformi.append((s[i][0], j - i, min(lung[i:j]), max(lung[i:j])))
+                i = j
+            else:
+                i += 1
+        prime = [parole(f)[0].lower() for _, f in s]
+        i = 0
+        while i < len(s):
+            j = i
+            while j + 1 < len(s) and prime[j + 1] == prime[i]:
+                j += 1
+            if j - i + 1 >= ATTACCHI_MINIMO and prime[i] not in ARTICOLI:
+                attacchi.append((s[i][0], parole(s[i][1])[0], j - i + 1))
+            i = j + 1
+    return uniformi, attacchi
+
+
+def accumuli_similitudini(testo):
+    """Similitudini esplicite: totale e luoghi in cui si accumulano."""
+    totale = len(RE_SIMILITUDINE.findall(testo))
+    luoghi = []
+    for p, f in frasi_posizionate(testo):
+        trovate = [m.group(0) for m in RE_SIMILITUDINE.finditer(f)]
+        if len(trovate) >= 2:
+            luoghi.append((p, "nella stessa frase", trovate))
+    quante, entro = SIMILITUDINI_CAPOVERSO
+    cursore = 0
+    for blocco in capoversi(testo):
+        inizio = testo.find(blocco, cursore)
+        cursore = inizio + len(blocco)
+        trovate = [(len(parole(blocco[:m.start()])), m) for m in RE_SIMILITUDINE.finditer(blocco)]
+        i = 0
+        while i + quante <= len(trovate):
+            if trovate[i + quante - 1][0] - trovate[i][0] <= entro:
+                j = i + quante
+                while j < len(trovate) and trovate[j][0] - trovate[i][0] <= entro:
+                    j += 1
+                gruppo = trovate[i:j]
+                pos = inizio + gruppo[0][1].start()
+                luoghi.append((pos, f"{len(gruppo)} entro {entro} parole dello stesso capoverso",
+                               [m.group(0) for _, m in gruppo]))
+                i = j
+            else:
+                i += 1
+    return totale, sorted(luoghi)
 
 
 def per_mille(n, tot):
@@ -778,6 +929,25 @@ def controlli(testo, dati):
     ris["nomi_simili"] = simili
 
     ris["dialoghi"] = conta_convenzioni(testo)
+
+    # Controlli di lingua (officina/punteggiatura-e-ritmo.md, officina/lessico-e-figure.md),
+    # sul testo visibile: stessi a capo del file, quindi stessi numeri di riga.
+    vis = testo_visibile(testo)
+    blocchi = [conta_parole(b) for b in capoversi(vis) if parole(b)]
+    ris["capoversi"] = (len(blocchi), round(statistics.mean(blocchi), 1) if blocchi else 0,
+                        max(blocchi, default=0))
+    uniformi, attacchi = ritmo_locale(vis)
+    ris["uniformi"] = [(riga_di(vis, p), n, a, b, estratto(vis, p + 40)) for p, n, a, b in uniformi]
+    ris["attacchi"] = [(riga_di(vis, p), w, n, estratto(vis, p + 40)) for p, w, n in attacchi]
+    narr_vis = maschera_dialoghi(vis)
+    lessico = [(m.group(0), riga_di(vis, m.start()), estratto(vis, m.start()), "antilingua")
+               for m in RE_ANTILINGUA.finditer(narr_vis)]
+    lessico += [(m.group(0), riga_di(vis, m.start()), estratto(vis, m.start()), "piuttosto che")
+                for m in RE_PIUTTOSTO_CHE.finditer(narr_vis)]
+    ris["lessico"] = sorted(lessico, key=lambda x: x[1])
+    totale, luoghi = accumuli_similitudini(vis)
+    ris["similitudini"] = (totale, [(riga_di(vis, p), dove, trovate, estratto(vis, p))
+                                    for p, dove, trovate in luoghi])
     return ris
 
 
@@ -822,7 +992,22 @@ def cmd_controlla(racconto, salva=False):
       f"la più lunga {rt['max']}, {rt['brevi']} frasi di quattro parole o meno.")
     if rt["frasi"] >= 20 and rt["dev"] < 5:
         w("- **Segnale**: varianza bassa. Le frasi hanno quasi tutte la stessa lunghezza: rischio di prosa piatta.")
+    nc, mc, xc = r["capoversi"]
+    w(f"- {nc} capoversi, in media {mc} parole, il più lungo {xc}." if nc != 1
+      else f"- Un solo capoverso, di {xc} parole.")
+    if r["parole"] > 1000 and xc > 0.6 * r["parole"]:
+        w("- **Segnale**: un solo capoverso porta più di metà del testo. Se non è una scelta di forma, "
+          "il lettore non ha dove riprendere fiato (officina/punteggiatura-e-ritmo.md).")
     w("")
+    if r["uniformi"] or r["attacchi"]:
+        w("## Ritmo locale (officina/punteggiatura-e-ritmo.md)")
+        w("Solo narrazione; le battute interrompono le serie. Candidati: una serie può essere voluta "
+          "(un'anafora, un elenco, uno *style coupé*).")
+        for riga, n, a, b, est in r["uniformi"]:
+            w(f"- riga {riga}: {n} frasi di fila tra {a} e {b} parole · {est}")
+        for riga, parola, n, est in r["attacchi"]:
+            w(f"- riga {riga}: {n} frasi di fila cominciano con «{parola}» · {est}")
+        w("")
     n, pm, top = r["mente"]
     w("## Avverbi in -mente (narrazione)")
     w(f"- {n}, cioè {pm} ogni mille parole. Più frequenti: " + (", ".join(f"{a} ({b})" for a, b in top) or "nessuno"))
@@ -861,6 +1046,21 @@ def cmd_controlla(racconto, salva=False):
     else:
         w("- Nessuna.")
     w("")
+    if r["lessico"]:
+        w("## Lessico da guardare (narrazione, officina/lessico-e-figure.md)")
+        w("Antilingua: parola d'ufficio dove basterebbe quella comune [F53]. «piuttosto che»: "
+          "verificare che non stia per «o» [F51]. Nelle battute non si cerca: lì può caratterizzare.")
+        for s, riga, est, tipo in r["lessico"]:
+            w(f"- riga {riga}: «{s}» ({tipo}) · {est}")
+        w("")
+    tot, luoghi = r["similitudini"]
+    if luoghi:
+        w("## Accumuli di similitudini (officina/lessico-e-figure.md)")
+        w(f"Similitudini esplicite candidate nel testo: {tot}. Il conteggio non è un segnale: "
+          "segnala solo dove si accumulano, e una similitudine può stare per «come» comparativo.")
+        for riga, dove, trovate, est in luoghi:
+            w(f"- riga {riga}: {dove} (" + ", ".join(f"«{t}»" for t in trovate) + f") · {est}")
+        w("")
     w("## Norma e superficie (officina/norme-redazionali.md)")
     if r["refusi"]:
         for spieg, riga, est in r["refusi"]:
@@ -904,6 +1104,7 @@ def profilo_testo(testo):
         "gerundi ‰": per_mille(len(re.findall(r"\b\w+(ando|endo)\b", low)), n),
         "gerundi in coda ‰": per_mille(len(RE_GERUNDIO_CODA.findall(testo)), n),
         "connettivi ‰": per_mille(sum(len(re.findall(r"\b" + re.escape(c) + r"\b", low)) for c in CONNETTIVI), n),
+        "terne ‰": per_mille(len(RE_TERNA.findall(testo)), n),
         "«non (è) solo… ma» ‰": per_mille(len(re.findall(r"\bnon (?:è |era )?solo\b[^.]{0,80}\bma\b", low)), n),
         "lunghezza media parola": round(statistics.mean(len(w) for w in parole(testo)), 2) if parole(testo) else 0,
     }

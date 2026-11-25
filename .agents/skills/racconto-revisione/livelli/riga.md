@@ -13,12 +13,15 @@ Leggi alla velocità di un lettore, non per cercare errori: ascolta dove la pros
 ## Controlli
 
 - **Voce**: la lingua appartiene a questo narratore e a questo punto di vista, o è scivolata verso il competente generico?
-- **Ritmo**: lunghezza delle frasi, a capo e punteggiatura cambiano con la pressione della scena, o il testo va sempre alla stessa velocità? Guarda media e deviazione nel report di `prosa.py`.
+- **Ritmo**: lunghezza delle frasi, a capo e punteggiatura cambiano con la pressione della scena, o il testo va sempre alla stessa velocità? Guarda media e deviazione, capoversi e **Ritmo locale** nel report di `prosa.py`; una serie uniforme o un'anafora possono essere volute (`officina/punteggiatura-e-ritmo.md`).
+- **Punteggiatura come ritmo**: punto, virgola, due punti e a capo dicono dove sta il rilievo. La virgola splice che imita il parlato o il pensiero in diretta è voce, non errore; chiedi solo dove fa perdere il filo. Segni che il profilo registra come rari nella voce dell'autore sono un segnale nei passaggi dell'assistente (`officina/punteggiatura-e-ritmo.md`).
+- **Lessico**: la parola esatta al posto di quella generica, nessuna antilingua nella narrazione (`officina/lessico-e-figure.md`). Non correggere i tratti dell'italiano dell'uso medio nella voce parlata.
+- **Figure**: vengono dal mondo di chi guarda? Fanno il lavoro o lo spiegano dopo? Metafore miste, figure di repertorio, accumuli (sezione **Accumuli di similitudini** del report). Se il profilo registra le similitudini come tratto di voce, si guarda la qualità e l'accumulo, non il numero.
 - **Chiarezza**: il lettore segue azioni, riferimenti, luoghi e pensieri senza spiegazioni in più? La confusione non è profondità.
 - **Dettaglio**: precisi e scelti, o generici e accumulati? Un'immagine esatta vale più di tre adeguate.
 - **Ridondanza**: il testo fa il lavoro e poi una frase spiega cosa ha fatto. È il difetto di riga più comune nella prosa generata.
 - **Formule**: le formule di repertorio e i tic del report, lette nel contesto: alcune sono scelte.
-- **Echi e ricorrenze**: dal report di `prosa.py`, escluse le parole che la scheda dichiara ricorrenti.
+- **Echi e ricorrenze**: dal report di `prosa.py`, escluse le parole che la scheda dichiara ricorrenti. La direzione è togliere o ricostruire la frase, non cercare un sinonimo: la sinonimia elegante cambia registro (`officina/lessico-e-figure.md`).
 - **Tavola LAMP** (`officina/difetti-ai.md`, parte 4 [F38]): passa le sette categorie come lista di controllo. Ogni segnalazione è un candidato da leggere nel contesto, come quelle dello script.
 
 ## Nel report

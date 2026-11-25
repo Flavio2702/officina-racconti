@@ -289,6 +289,90 @@ class ProsaTest(unittest.TestCase):
         self.assertIn("regex non valida", err.getvalue())
         self.assertIn("riga 1", err.getvalue())
 
+    # Controlli di lingua: officina/punteggiatura-e-ritmo.md e officina/lessico-e-figure.md.
+
+    def refusi_di(self, testo):
+        return [spieg for spieg, _, _ in prosa.controlli(testo, {})["refusi"]]
+
+    def test_virgola_tra_verbo_e_oggettiva(self):
+        self.assertTrue(any("oggettiva" in s for s in self.refusi_di("Così ho capito, che era tardi.")))
+        self.assertFalse(any("oggettiva" in s for s in self.refusi_di("Così ho capito che era tardi.")))
+        self.assertFalse(any("oggettiva" in s for s in self.refusi_di("Penso che, se vuoi, sia tardi.")))
+        # Dislocazione a destra con ripresa del pronome: uso medio, non virgola nel nucleo.
+        for frase in ("Lo so, che sei stanco.", "L'ho capito, che era tardi.", "Non lo so, che dire."):
+            self.assertFalse(any("oggettiva" in s for s in self.refusi_di(frase)), frase)
+        self.assertFalse(any("oggettiva" in s for s in self.refusi_di("Penso, e lo dico, che sia tardi.")))
+        # Limite dichiarato in officina/punteggiatura-e-ritmo.md: un inciso che si chiude su un
+        # verbo dell'elenco («è lui, dice, che…») resta un candidato da leggere.
+        self.assertTrue(any("oggettiva" in s for s in self.refusi_di("È lui, dice, che ha cominciato.")))
+        self.assertFalse(any("oggettiva" in s for s in self.refusi_di("Lo vedo spesso, che peccato.")))
+
+    def test_segni_doppi(self):
+        self.assertTrue(any("segni doppi" in s for s in self.refusi_di("Davvero?! Sì!!")))
+        self.assertTrue(any("segni doppi" in s for s in self.refusi_di("Cosa importa\\!\\! basta.")))
+        self.assertFalse(any("segni doppi" in s for s in self.refusi_di("Davvero? Sì! Basta.")))
+
+    def test_antilingua_e_piuttosto_che_solo_in_narrazione(self):
+        r = prosa.controlli("Effettuò una telefonata. Prendo il treno piuttosto che l'auto.\n\n"
+                            "«Abbiamo effettuato il controllo nel momento in cui è arrivato.»\n", {})
+        trovate = [(s.lower(), riga, tipo) for s, riga, _, tipo in r["lessico"]]
+        self.assertEqual(trovate, [("effettuò", 1, "antilingua"), ("piuttosto che", 1, "piuttosto che")])
+        self.assertEqual(prosa.controlli("Fece una telefonata.\n— Effettuò il controllo.\n", {})["lessico"], [])
+
+    def test_maschera_dialoghi_conserva_posizioni(self):
+        testo = "Uno «due» tre.\n— Quattro.\nCinque."
+        mascherato = prosa.maschera_dialoghi(testo)
+        self.assertEqual(len(mascherato), len(testo))
+        self.assertEqual(mascherato.count("\n"), 2)
+        self.assertNotIn("due", mascherato)
+        self.assertNotIn("Quattro", mascherato)
+        self.assertIn("Cinque", mascherato)
+
+    def test_tratto_uniforme_e_attacchi(self):
+        uniforme = " ".join("Il cane corre nel prato verde." for _ in range(6))
+        uniformi, _ = prosa.ritmo_locale(uniforme)
+        self.assertEqual([(n, a, b) for _, n, a, b in uniformi], [(6, 6, 6)])
+        variato = ("Il cane corre. Il cane corre nel prato verde sotto la pioggia fitta di novembre. "
+                   "Corre. Il cane corre nel prato. Poi si ferma. Il cane corre ancora.")
+        self.assertEqual(prosa.ritmo_locale(variato)[0], [])
+        _, attacchi = prosa.ritmo_locale("Poi venne. Poi andò via. Poi tornò. Ma dopo tacque.")
+        self.assertEqual([(w, n) for _, w, n in attacchi], [("Poi", 3)])
+        # Gli articoli in testa non fanno anafora; una battuta interrompe la serie.
+        self.assertEqual(prosa.ritmo_locale("Il sole. Il mare. Il vento.")[1], [])
+        self.assertEqual(prosa.ritmo_locale("Poi venne. «Poi?» Poi andò. Poi tornò.")[1], [])
+
+    def test_accumuli_di_similitudini(self):
+        totale, luoghi = prosa.accumuli_similitudini("Era come un muro, come se aspettasse qualcuno.")
+        self.assertEqual((totale, [d for _, d, _ in luoghi]), (2, ["nella stessa frase"]))
+        sparse = ("Era come un muro. " + "Poi la sera passò lenta sulla piazza vuota. " * 30 +
+                  "Rideva come un bambino. " + "Poi la sera passò lenta sulla piazza vuota. " * 30 +
+                  "Correva come se fosse tardi.")
+        self.assertEqual(prosa.accumuli_similitudini(sparse), (3, []))
+        vicine = "Era come un muro. Rideva come un bambino. Correva come se fosse tardi."
+        self.assertIn("3 entro 120 parole dello stesso capoverso",
+                      [d for _, d, _ in prosa.accumuli_similitudini(vicine)[1]])
+
+    def test_sezioni_nuove_solo_con_risultati(self):
+        self.scrivi("testo.md", "La sera era calda. Lei aprì la finestra e guardò la strada.\n")
+        report = self.cattura(prosa.cmd_controlla, str(self.cartella))
+        for sezione in ("Ritmo locale", "Lessico da guardare", "Accumuli di similitudini"):
+            self.assertNotIn(sezione, report)
+        self.assertIn("Un solo capoverso", report)
+        self.scrivi("testo.md", "Poi venne. Poi andò. Poi tornò. Effettuò un giro, come un cane, "
+                                "come se avesse fretta.\n\nDopo.\n")
+        report = self.cattura(prosa.cmd_controlla, str(self.cartella))
+        for sezione in ("Ritmo locale", "Lessico da guardare", "Accumuli di similitudini"):
+            self.assertIn(sezione, report)
+        self.assertIn("2 capoversi", report)
+
+    def test_terne_in_confronta(self):
+        self.scrivi("testo.md", "Resto del racconto, senza elenchi.\n")
+        passaggio = self.radice / "passaggio.md"
+        passaggio.write_text("Pane, vino e sale. Luce, ombra e vento.", encoding="utf-8")
+        report = self.cattura(prosa.cmd_confronta, str(passaggio), str(self.cartella))
+        self.assertIn("| terne ‰ |", report)
+        self.assertEqual(len(prosa.RE_TERNA.findall("Pane, vino e sale. Luce, ombra e vento.")), 2)
+
     def test_docx_corsivo_attivo(self):
         percorso = self.docx('<w:p><w:r><w:t xml:space="preserve">È </w:t></w:r>'
                              '<w:r><w:rPr><w:i/></w:rPr><w:t>sera</w:t></w:r>'

@@ -26,8 +26,8 @@ Il livello lo sceglie l'autore. Se non lo dice, dopo la prima impressione consul
 | --- | --- | --- |
 | strutturale | `livelli/strutturale.md` | `officina/forma-breve.md` |
 | scena | `livelli/scena.md` | `officina/scena.md` |
-| riga | `livelli/riga.md` | `officina/difetti-ai.md`, `voce/profilo.md`, `voce/difetti-personali.md` |
-| redazione | `livelli/redazione.md` | `officina/norme-redazionali.md`, `officina/fonti.md` |
+| riga | `livelli/riga.md` | `officina/difetti-ai.md`, `officina/punteggiatura-e-ritmo.md`, `officina/lessico-e-figure.md`, `voce/profilo.md`, `voce/difetti-personali.md` |
+| redazione | `livelli/redazione.md` | `officina/norme-redazionali.md`, `officina/punteggiatura-e-ritmo.md`, `officina/fonti.md` |
 | bozze | `livelli/bozze.md` | — |
 
 I livelli bassi presuppongono che gli alti reggano: un problema di struttura serio trovato a un livello basso si dice, e ci si ferma lì.
