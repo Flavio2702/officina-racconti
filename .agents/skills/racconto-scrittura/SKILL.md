@@ -39,9 +39,14 @@ Chiedi quale, se l'autore non lo dice.
 ### Il controllo prima di mostrare
 
 1. Scrivi il passaggio in `racconti/<nome>/materiali/_passaggio.md` ed esegui `python -X utf8 strumenti/prosa.py confronta racconti/<nome>/materiali/_passaggio.md <nome>`.
-2. Valuta gli scarti (ritmo, gerundi in coda, connettivi, formule) rispetto alla funzione del passaggio e all'ancora: `confronta` paragona al resto del racconto, non certifica la voce dell'autore, e sotto le 80 parole conta soprattutto il contesto. Conserva uno scarto motivato (un finale che cambia ritmo); riscrivi solo se contraddice il compito o l'effetto.
-3. **Passata di sottrazione.** Rileggi con la tavola LAMP (`officina/difetti-ai.md`, parte 4) [F38] e con **Taciuto**; togli anche gli accumuli di figure e le parole d'ufficio. Puoi solo togliere, o sostituire con qualcosa di più semplice: niente aggiunte, nessun ornamento al posto di un cliché. Al massimo due giri.
-4. Mostra all'autore il passaggio, il punto esatto, l'ancora usata e, in una riga ciascuno, gli scarti conservati o rivisti e cosa la sottrazione ha tolto e perché.
+2. Leggi il report in quest'ordine (`officina/stilometria.md`):
+   - **Tratti di voce**, prima di tutto i marcatori di voce, se `strumenti/marcatori_voce.txt` ne contiene. Poi le parole «meno presenti del solito» della distanza.
+   - **Ritmo**: una deviazione o un 90° percentile delle frasi sotto la banda dicono che il passaggio va a una velocità sola.
+   - **Segnali dell'italiano generato** e formule.
+   - La colonna **stesso racconto** vale più del corpus: i racconti di uno stesso autore possono differire fra loro più di quanto una banda sola mostri. La distanza distingue poco nei passaggi brevi: prima di trarne conclusioni guarda la tabella di affidabilità di `prosa.py voce`.
+3. Valuta ogni misura fuori banda rispetto alla funzione del passaggio e all'ancora. Conserva uno scarto motivato, per esempio un finale che cambia ritmo. Riscrivi solo se lo scarto contraddice il compito o l'effetto. **Non riscrivere per riportare un numero dentro la banda**: un valore fuori banda è una domanda sulla funzione del passaggio, e un passaggio dentro tutte le bande non è per questo più dell'autore. Non aggiungere marcatori o connettivi per farli comparire: un «beh» messo per il conteggio è un tic, non la voce. Se mancano, torna all'ancora e chiediti se il narratore in quel punto pensa in diretta.
+4. **Passata di sottrazione.** Rileggi con la tavola LAMP (`officina/difetti-ai.md`, parte 4) [F38] e con **Taciuto**; togli anche gli accumuli di figure e le parole d'ufficio. Puoi solo togliere, o sostituire con qualcosa di più semplice: niente aggiunte, nessun ornamento al posto di un cliché. Al massimo due giri.
+5. Mostra all'autore il passaggio, il punto esatto, l'ancora usata e, in una riga ciascuno, gli scarti fuori banda conservati o rivisti, con il motivo, e cosa la sottrazione ha tolto e perché.
 
 ## Il risultato
 

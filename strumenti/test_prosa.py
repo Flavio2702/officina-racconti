@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import os
+import random
 from pathlib import Path
 import subprocess
 import sys
@@ -878,7 +879,7 @@ class ProsaTest(unittest.TestCase):
         extra.parent.mkdir()
         extra.write_text("\ufeffscelto qui\n", encoding="utf-8")
         report = self.cattura(prosa.cmd_confronta, str(passaggio), str(self.cartella))
-        self.assertIn("resto del racconto: 4 parole", report)
+        self.assertIn("Stesso racconto: 4 parole senza coincidenze", report)
         self.assertIn("«scelto qui»", report)
         self.assertFalse(prosa.testo_racconto(self.cartella)[0][1].startswith("\ufeff"))
         self.cattura(prosa.dividi, self.cartella)
@@ -1365,6 +1366,261 @@ class ProsaTest(unittest.TestCase):
         output = risultato.stdout.decode("utf-8")
         self.assertIn("più", output)
         self.assertIn("«noto»", output)
+
+
+def prosa_sintetica(seme, quante=60, coda_extra=()):
+    """Prosa italiana inventata per i test: frasi brevi da piccoli elenchi, ripetibili col seme."""
+    r = random.Random(seme)
+    soggetti = ["Il cane", "La vicina", "Mio fratello", "Il postino", "Una ragazza", "Il barista"]
+    verbi = ["attraversa la piazza", "guarda il muro", "apre la finestra", "aspetta il tram",
+             "conta le monete", "chiude la porta"]
+    code = ["e poi si ferma", "senza dire niente", "come ogni sera", "anche se piove",
+            "ebbene come sempre", "con le mani in tasca"] + list(coda_extra)
+    return " ".join(f"{r.choice(soggetti)} {r.choice(verbi)} {r.choice(code)}." for _ in range(quante))
+
+
+class VoceTest(unittest.TestCase):
+    """Misure di voce (officina/stilometria.md), solo con testi sintetici."""
+
+    def setUp(self):
+        temporanea = tempfile.TemporaryDirectory(prefix="officina-voce-")
+        self.addCleanup(temporanea.cleanup)
+        self.radice = Path(temporanea.name)
+        for nome, valore in (("RADICE", self.radice), ("RACCONTI", self.radice / "racconti")):
+            modifica = patch.object(prosa, nome, valore)
+            modifica.start()
+            self.addCleanup(modifica.stop)
+
+    def racconto(self, nome, testo, stato="consolidato", materiali=()):
+        cartella = self.radice / "racconti" / nome
+        (cartella / "materiali").mkdir(parents=True)
+        (cartella / "scheda.md").write_text(f"---\nstato: {stato}\nmodalita: breve\n---\n", encoding="utf-8")
+        (cartella / "testo.md").write_text(testo, encoding="utf-8")
+        for i, corpo in enumerate(materiali, 1):
+            (cartella / "materiali" / f"2026-01-0{i}-variante.md").write_text(
+                "# Variante\n\n- Autore del testo: assistente (racconto-scrittura, variante)\n\n" + corpo + "\n",
+                encoding="utf-8")
+        return cartella
+
+    def marcatori(self, contenuto):
+        f = self.radice / "strumenti" / "marcatori_voce.txt"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text(contenuto, encoding="utf-8")
+
+    def cattura(self, funzione, *args, **kwargs):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            funzione(*args, **kwargs)
+        return out.getvalue()
+
+    def frasi_finte(self, lunghezze, racconto="r", stacco_a=None):
+        out = []
+        for i, n in enumerate(lunghezze):
+            out.append({"racconto": racconto, "indice": i, "capoverso": i + 1,
+                        "testo": " ".join(["parola"] * n) + ".", "parole": n, "quota": 0.0,
+                        "nuovo_capoverso": True, "stacco_prima": i == stacco_a})
+        return out
+
+    # Finestre, bande, distanze.
+
+    def test_finestre_a_frasi_intere_mezzo_passo_e_stacchi(self):
+        fr = self.frasi_finte([5] * 8, stacco_a=4)
+        segs = prosa.segmenti(fr, lambda f: True)
+        self.assertEqual([len(s) for s in segs], [4, 4])
+        fin = prosa.finestre(segs, 10)
+        self.assertTrue(all(f["parole"] >= 10 for f in fin))
+        # due frasi per finestra, una nuova ogni frase (mezza finestra), mai attraverso lo stacco
+        self.assertEqual([f["chiave"][1:] for f in fin], [(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)])
+        self.assertEqual(prosa.finestre(segs, 100), [])
+
+    def test_segmenti_spezzati_dalle_frasi_escluse(self):
+        fr = self.frasi_finte([3, 3, 3, 3])
+        fr[1]["quota"] = 1.0
+        self.assertEqual([[f["indice"] for f in s] for s in prosa.zona_autore(fr)], [[0], [2, 3]])
+        self.assertEqual([[f["indice"] for f in s] for s in prosa.zona_contrasto(fr)], [[1]])
+
+    def test_banda_poche_finestre_dentro_e_fuori(self):
+        self.assertEqual(prosa.banda([1, 2, 3], 2)[0], "poche finestre")
+        valori = list(range(1, 21))
+        self.assertEqual(prosa.banda(valori, 10)[0], "dentro")
+        self.assertEqual(prosa.banda(valori, 25)[0], "oltre il massimo osservato")
+        self.assertEqual(prosa.banda(valori, 0)[0], "sotto il minimo osservato")
+        self.assertEqual(prosa.banda(valori, 19.9)[0], "oltre il 95° percentile")
+        self.assertTrue(prosa.oltre("oltre il 95° percentile"))
+        self.assertFalse(prosa.oltre("sotto il minimo osservato"))
+        self.assertAlmostEqual(prosa.quantile([0, 10], 0.5), 5)
+
+    def test_delta_e_coseno(self):
+        media, dev = [0.1, 0.2, 0.3], [0.05, 0.1, 0.0]
+        self.assertEqual(prosa.delta(media, media, dev), 0)
+        self.assertAlmostEqual(prosa.delta([0.15, 0.2, 0.9], media, dev), 0.5)  # la parola senza varianza non conta
+        a, b = [1.0, -2.0, 0.5], [0.3, 1.0, -1.0]
+        self.assertAlmostEqual(prosa.coseno(a, b), prosa.coseno(b, a))
+        self.assertAlmostEqual(prosa.coseno(a, a), 0)
+        self.assertAlmostEqual(prosa.coseno(a, [-x for x in a]), 2)
+        voc = ["il", "cane", "piazza"]
+        uno = "Il cane attraversa la piazza."
+        self.assertEqual(prosa.vettore(uno, voc), prosa.vettore(uno + " " + uno, voc))
+
+    def test_scegli_parole_senza_pronomi_nomi_e_con_culling(self):
+        comune = "Io e Bruno e il cane e il gatto sulla strada. "
+        a = (comune + "Il treno parte presto. ") * 40
+        b = (comune + "Il mare resta calmo. ") * 40
+        parole_ = prosa.scegli_parole({"a": a, "b": b})
+        self.assertNotIn("io", parole_)      # pronome personale
+        self.assertNotIn("bruno", parole_)    # quasi sempre maiuscola: nome proprio
+        self.assertIn("e", parole_)
+        self.assertNotIn("treno", parole_)   # concentrata in un solo racconto: esce col culling
+        self.assertIn("il", parole_)
+        self.assertIn("treno", prosa.scegli_parole({"a": a}))  # un racconto solo: niente culling
+
+    def test_spiega_parole_in_eccesso_e_mancanti(self):
+        testo = prosa_sintetica(1, 120)
+        rif = prosa.Riferimento([prosa.frasi_da_testo(testo)], 40)
+        self.assertTrue(rif.basta())
+        eccesso, mancanti = rif.spiega("La vicina guarda il muro. " * 4 + "Il tram e il tram e il tram.")
+        self.assertIn("tram", [w for _, w, _, _ in eccesso])
+        self.assertTrue(all(z < -1.5 and attese >= 1.5 for z, _, _, attese in mancanti))
+        self.assertTrue(rif.delta_propri())
+
+    def test_auc(self):
+        self.assertEqual(prosa.auc([3, 4], [1, 2]), 1.0)
+        self.assertEqual(prosa.auc([1, 2], [1, 2]), 0.5)
+        self.assertIsNone(prosa.auc([], [1]))
+
+    # Profilo numerico.
+
+    def test_similitudini_strette_e_come_contati_a_parte(self):
+        p = prosa.profilo_testo("Pesa come un mattone. Come stai? Lo dico come penso.", [])
+        n = 10
+        self.assertEqual(p["similitudini strette ‰"], prosa.per_mille(1, n))
+        self.assertEqual(p["«come» ‰"], prosa.per_mille(3, n))
+
+    def test_connettivi_di_raccordo_senza_quindi(self):
+        self.assertNotIn("quindi", prosa.CONNETTIVI)
+        self.assertIn("tuttavia", prosa.CONNETTIVI)
+        p = prosa.profilo_testo("Quindi resto. Tuttavia esco.", [])
+        self.assertEqual(p["connettivi di raccordo ‰"], prosa.per_mille(1, 4))
+        self.assertEqual(p["quindi, invece, comunque ‰"], prosa.per_mille(1, 4))
+        self.assertEqual(prosa.gruppo_di("gerundi in coda ‰"), prosa.GRUPPO_SEGNALI)
+        self.assertEqual(prosa.gruppo_di("gerundi ‰"), prosa.GRUPPO_VOCE)
+
+    def test_punteggiatura_e_domande_solo_nella_narrazione(self):
+        p = prosa.profilo_testo("Resto qui; aspetto. «Vieni; dai!» Perché resto? Ebbene, resto.", [])
+        self.assertEqual(p["punto e virgola nella narrazione ‰"], prosa.per_mille(1, 9))
+        self.assertEqual(p["esclamativi nella narrazione ‰"], 0)
+        self.assertEqual(p["domande nella narrazione ‰"], prosa.per_mille(1, 9))
+
+    def test_marcatori_assenti_vuoti_validi_e_regex_non_valida(self):
+        self.assertEqual(prosa.marcatori_voce(), [])
+        self.assertNotIn("marcatori di voce ‰", prosa.profilo_testo("Ebbene, sì.", None))
+        self.marcatori("# solo commenti\n\n")
+        self.assertEqual(prosa.marcatori_voce(), [])
+        self.marcatori("ebbene\ntutto sommato\n")
+        m = prosa.marcatori_voce()
+        self.assertEqual(prosa.conta_marcatori("Ebbene, resto. Tutto sommato credo. Ebbenezer no.", m), 2)
+        self.assertEqual(prosa.profilo_testo("Ebbene, resto.", m)["marcatori di voce ‰"], prosa.per_mille(1, 2))
+        self.marcatori("(\n")
+        with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
+            prosa.marcatori_voce()
+        self.assertIn("regex non valida", err.getvalue())
+
+    # Provenienza alla frase e corpus.
+
+    MATERIALE = "La lampada del corridoio resta accesa tutta la notte senza che nessuno la spenga."
+
+    def test_frasi_racconto_riportano_la_coincidenza_alla_frase(self):
+        mio = "Torno a casa presto stasera. "
+        c = self.racconto("uno", mio + self.MATERIALE + "\n\n* * *\n\nFine del giro.\n", materiali=[self.MATERIALE])
+        fr = prosa.frasi_racconto(c)
+        self.assertEqual([f["quota"] for f in fr], [0.0, 1.0, 0.0])
+        self.assertEqual([f["stacco_prima"] for f in fr], [False, False, True])
+        self.assertEqual(prosa.parole_segmenti(prosa.zona_autore(fr)), len(prosa.parole(mio + "Fine del giro.")))
+
+    def test_corpus_solo_consolidati_esclude_coincidenze_quasi_totali(self):
+        self.racconto("mio", prosa_sintetica(2, 30) + "\n\n" + self.MATERIALE + "\n", materiali=[self.MATERIALE])
+        self.racconto("bozza", prosa_sintetica(3, 30) + "\n\n" + self.MATERIALE + "\n",
+                      stato="stesura", materiali=[self.MATERIALE])
+        self.racconto("copiato", self.MATERIALE + "\n", materiali=[self.MATERIALE])
+        (self.radice / "racconti" / "_modello").mkdir()
+        corpus = prosa.corpus_voce()
+        self.assertEqual(list(corpus["autore"]), ["mio"])
+        self.assertEqual(sorted(corpus["contrasto"]), ["bozza", "mio"])
+        self.assertEqual([r for r, _ in corpus["esclusi"]], ["copiato"])
+        testo_autore = prosa.testo_segmenti(corpus["autore"]["mio"])
+        self.assertNotIn("lampada", testo_autore)
+
+    def test_brani_esempi_salta_formato_e_metadati(self):
+        voce = self.radice / "voce"
+        voce.mkdir()
+        self.assertEqual(prosa.brani_esempi(), "")
+        (voce / "esempi.md").write_text(
+            "# Brani\n\n```\n## <titolo>\n- Racconto: <nome>\n\n<il brano>\n```\n\n## Brani\n\nIntro.\n\n"
+            "## Uno\n- Racconto: a · Perché è qui: prova\n\nIl primo brano.\n\n"
+            "## Due\n- Racconto: b · Perché è qui: prova\n\nIl secondo brano.\n", encoding="utf-8")
+        self.assertEqual(prosa.brani_esempi(), "Il primo brano.\n\nIl secondo brano.")
+
+    # Comandi.
+
+    def test_confronta_esclude_dal_riferimento_le_frasi_coincidenti(self):
+        mio = prosa_sintetica(4, 40)
+        c = self.racconto("uno", mio + "\n\n" + self.MATERIALE + "\n", stato="stesura", materiali=[self.MATERIALE])
+        passaggio = self.radice / "passaggio.md"
+        passaggio.write_text("Una barca rossa scivola lenta sul lago grigio.", encoding="utf-8")
+        report = self.cattura(prosa.cmd_confronta, str(passaggio), str(c))
+        self.assertIn(f"Stesso racconto: {len(prosa.parole(mio))} parole senza coincidenze", report)
+        self.assertIn("Corpus di voce: 0 parole da 0 racconti consolidati", report)
+        self.assertIn("| terne ‰ |", report)
+        self.assertIn("non dice chi ha scritto", report)
+        for parola in ("IA", "umano", "intelligenza artificiale"):
+            self.assertNotIn(parola, report)
+
+    def test_confronta_segnala_cio_che_esce_dalla_banda(self):
+        self.marcatori("ebbene\n")
+        frasi_ = prosa_sintetica(5, 200).split(". ")
+        c = self.racconto("uno", ". ".join("Ebbene " + f[0].lower() + f[1:] for f in frasi_) + "\n")
+        passaggio = self.radice / "passaggio.md"
+        passaggio.write_text("Tuttavia il tram arriva; inoltre la piazza resta vuota, permettendo di "
+                             "attraversare. Tuttavia nessuno parla; inoltre il postino aspetta.", encoding="utf-8")
+        report = self.cattura(prosa.cmd_confronta, str(passaggio), str(c))
+        self.assertIn("marcatori di voce ‰: sotto il minimo osservato (stesso racconto, corpus)", report)
+        self.assertIn("connettivi di raccordo ‰: oltre il massimo osservato", report)
+        self.assertIn("Non si riscrive per riportare un numero dentro la banda", report)
+
+    def test_voce_con_corpus_vuoto_come_nel_modello_pubblico(self):
+        report = self.cattura(prosa.main, ["prosa.py", "voce"])
+        self.assertIn("non c'è ancora un corpus di voce", report)
+        self.assertIn("marcatori_voce.txt è vuoto o assente", report)
+
+    def test_voce_misure_affidabilita_e_salva(self):
+        self.marcatori("ebbene\n")
+        contrasto = prosa_sintetica(9, 60, coda_extra=["tuttavia in modo diverso"])
+        self.racconto("primo", prosa_sintetica(6, 150) + "\n\n" + contrasto + "\n", materiali=[contrasto])
+        self.racconto("secondo", prosa_sintetica(7, 150) + "\n")
+        report = self.cattura(prosa.main, ["prosa.py", "voce", "--salva"])
+        for sezione in ("Profilo per racconto", "Similitudini: due conteggi diversi",
+                        "Affidabilità per lunghezza", "Variazione tra racconti", "Definizioni"):
+            self.assertIn(sezione, report)
+        self.assertIn("| primo | 100 |", report)
+        self.assertIn("Contrasto per racconto: primo", report)
+        salvati = list((self.radice / "voce" / "misure").glob("*-misure.md"))
+        self.assertEqual(len(salvati), 1)
+
+    def test_deriva_senza_riferimento_e_con_finestra(self):
+        c = self.racconto("solo", self.MATERIALE + "\n", stato="stesura", materiali=[self.MATERIALE])
+        self.assertIn("Non abbastanza testo di riferimento", self.cattura(prosa.cmd_deriva, str(c), 20))
+        self.racconto("base", prosa_sintetica(8, 150) + "\n")
+        report = self.cattura(prosa.main, ["prosa.py", "deriva", str(c), "--finestra", "20"])
+        self.assertIn("contro le finestre del corpus di voce", report)
+        self.assertIn("Finestre oltre la banda:", report)
+        with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
+            self.cattura(prosa.main, ["prosa.py", "conta", str(c), "--finestra", "20"])
+        self.assertIn("solo con «deriva»", err.getvalue())
+
+    def test_aiuto_elenca_voce_e_deriva(self):
+        aiuto = self.cattura(prosa.main, ["prosa.py", "aiuto"])
+        for comando in ("voce [--salva]", "deriva <racconto>", "--finestra", "voce/misure/"):
+            self.assertIn(comando, aiuto)
 
 
 if __name__ == "__main__":

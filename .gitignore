@@ -8,6 +8,7 @@
 /bozze/
 /archivio/
 /strumenti/stilemi_extra.txt
+/strumenti/marcatori_voce.txt
 
 # Credenziali, configurazioni locali e cronologie degli assistenti.
 .env

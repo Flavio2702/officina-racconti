@@ -1,0 +1,7 @@
+# Marcatori di voce che prosa.py conta in confronta, deriva e voce, una espressione per riga.
+# Si possono usare espressioni regolari di Python, senza distinzione tra maiuscole e minuscole;
+# ogni riga si cerca come parola intera. Le righe che iniziano con # sono commenti.
+#
+# Sono una configurazione dello strumento, non il profilo: si copiano dalle prove del profilo
+# (per esempio i connettivi del parlato tipici del narratore) e si aggiornano con $racconto-voce.
+# Nessun marcatore personale preimpostato: con il file vuoto i marcatori non si contano.

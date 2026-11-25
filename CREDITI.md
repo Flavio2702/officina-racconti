@@ -37,6 +37,15 @@ L'officina adatta, traduce e riscrive in italiano idee e procedure da quattro pr
 - Licenza: MIT (`LICENZE/everyday-writer-MIT.txt`)
 - Materiale adattato: il formato della *failure library* → `modelli/voce/difetti-personali.md`; la sezione «cosa non fai mai» del profilo → `modelli/voce/profilo.md`.
 
+## Metodi di stilometria
+
+Le misure di `confronta`, `deriva` e `voce` in `strumenti/prosa.py` riprendono metodi pubblicati: Delta di Burrows con il *culling* e l'esclusione dei pronomi, Cosine Delta, finestre mobili, AUC. Sono **riscritte da zero** con la sola libreria standard: da questi progetti **non è stato copiato codice**. Le fonti dei metodi sono in `officina/fonti.md` ([F58]–[F66]).
+
+- **stylo**, di M. Eder, J. Rybicki, M. Kestemont, S. Pielström (https://github.com/computationalstylistics/stylo, GPL-3). Idee riprese: distanze Delta, *culling*, *rolling stylometry* (`rolling.delta`, `rolling.classify`), lettura dei risultati come variazione e non come verdetto.
+- **faststylometry**, di Fast Data Science (https://github.com/fastdatascience/faststylometry, MIT). Idee riprese: il Delta calcolato su un corpus di riferimento e letto contro una distribuzione invece che contro una soglia fissa.
+- **ruzicka**, di M. Kestemont (https://github.com/mikekestemont/ruzicka, MIT). Consultato per la verifica d'autore con gli impostori e la distanza minmax; non adottato, perché attribuisce, e qui non si attribuisce.
+- **pyzeta**, del gruppo CLiGS (https://github.com/cligs/pyzeta, GPL-3). Consultato per lo Zeta di Burrows e Craig sulle parole distintive; non adottato.
+
 ## Codex
 
 La struttura del progetto (`.agents/skills/`, `agents/openai.yaml`, `AGENTS.md`) segue la documentazione di Codex:

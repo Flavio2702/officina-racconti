@@ -16,8 +16,15 @@ Il profilo descrive come scrive l'autore in generale, non come è scritto un rac
 ## Comandi
 
 - **calibra**: costruisce o ricostruisce il profilo dai racconti consolidati. Proponi da tre a sei brani vari per `voce/esempi.md`; entrano solo quelli che l'autore approva.
-- **aggiorna** `<nome>`: dopo il consolidamento, passa i **Candidati di voce** del racconto attraverso il filtro; valuta conferme, aggiunte e controevidenze; proponi brani d'esempio e voci per `voce/difetti-personali.md`.
-- **deriva** `<passaggio>`: dove un passaggio si allontana dal profilo e dagli esempi, senza dire se è un male; uno scarto funzionale può restare. `prosa.py confronta` paragona al resto del racconto, non certifica la voce dell'autore; sotto le 80 parole è poco affidabile.
+- **aggiorna** `<nome>`: dopo il consolidamento, passa i **Candidati di voce** del racconto attraverso il filtro; valuta conferme, aggiunte e controevidenze; proponi brani d'esempio e voci per `voce/difetti-personali.md`. Con **aggiorna** senza nome, valuta le proposte ancora aperte in `voce/` (per esempio una proposta sulle misure).
+- **deriva** `<passaggio>` o `<nome>`: dove un passaggio o un racconto si allontana dalla variazione dell'autore, senza dire se è un male; uno scarto funzionale può restare. Per un passaggio usa `prosa.py confronta`, per un racconto intero `prosa.py deriva`. Le bande dicono dove il testo esce dalla variazione osservata, non certificano la voce dell'autore.
+
+### Le misure
+
+- Esegui `python -X utf8 strumenti/prosa.py voce` all'inizio di **calibra** e **aggiorna**. Ogni numero che entra nel profilo viene da quel report, con la sua definizione, la zona misurata e il racconto. Nessun numero si scrive a memoria o da un conteggio diverso.
+- Leggi la tabella di **affidabilità**: una misura che non distingue a una data lunghezza non regge un tratto. Leggi anche la **variazione tra racconti**: se un racconto esce dalla banda degli altri, la differenza è del racconto o del narratore, e il tratto va descritto come intervallo, non come valore medio.
+- Con `--salva` il report va in `voce/misure/`; citane il percorso nello **Storico**.
+- I marcatori di `strumenti/marcatori_voce.txt` raccolgono parole ed espressioni prese dalle prove del profilo, per esempio i connettivi del parlato. Se il profilo cambia, proponi all'autore anche il file aggiornato.
 
 ### Il filtro: stile o racconto?
 
@@ -27,7 +34,7 @@ Un tratto è **confermato** solo con evidenza in almeno due racconti consolidati
 
 ### Cosa osservare
 
-Dai segnali di *voice-match* di unslop e da EveryDay-Writer (`CREDITI.md`): **ritmo** (media e varianza delle frasi con `prosa.py controlla`, dove si accorciano o si allungano); **sintassi** (paratassi o ipotassi, periodi lunghi, frasi nominali); **punteggiatura** usata ed evitata; **registro e lessico** e come si mescolano; **immagini**, di che materia sono e come tornano; **distanza e umorismo** (ironia, pudore, enfasi).
+Dai segnali di *voice-match* di unslop e da EveryDay-Writer (`CREDITI.md`): **ritmo** (media, percentili e varianza delle frasi con `prosa.py voce`, dove si accorciano o si allungano con `prosa.py controlla`); **sintassi** (paratassi o ipotassi, periodi lunghi, frasi nominali); **punteggiatura** usata ed evitata; **registro e lessico** e come si mescolano; **immagini**, di che materia sono e come tornano; **distanza e umorismo** (ironia, pudore, enfasi).
 
 ## Il risultato
 

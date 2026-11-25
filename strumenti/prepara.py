@@ -9,8 +9,8 @@ def prepara(radice=RADICE):
     sorgenti = [(radice / 'modelli' / 'voce' / nome, radice / 'voce' / nome)
                 for nome in ('profilo.md', 'esempi.md', 'difetti-personali.md',
                              'scelte-redazionali.md')]
-    sorgenti.append((radice / 'modelli' / 'stilemi_extra.txt',
-                     radice / 'strumenti' / 'stilemi_extra.txt'))
+    for nome in ('stilemi_extra.txt', 'marcatori_voce.txt'):
+        sorgenti.append((radice / 'modelli' / nome, radice / 'strumenti' / nome))
     creati = []
     for modello, destinazione in sorgenti:
         contenuto = modello.read_bytes()

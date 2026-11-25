@@ -47,8 +47,22 @@ class DistribuzioneTest(unittest.TestCase):
         self.assertEqual(originale, (self.radice / 'esempi/il-faro.md').read_bytes())
         self.assertTrue((self.radice / 'racconti/il-faro/testo.md').is_file())
 
+    def test_misure_di_voce_con_il_profilo_vuoto_del_modello(self):
+        self.comando('strumenti/prepara.py')
+        self.comando('strumenti/prosa.py', 'nuovo', 'il-faro')
+        self.comando('strumenti/prosa.py', 'importa', 'esempi/il-faro.md', 'il-faro')
+        voce = self.comando('strumenti/prosa.py', 'voce')
+        self.assertIn("non c'è ancora un corpus di voce", voce)
+        self.assertIn('marcatori_voce.txt è vuoto o assente', voce)
+        passaggio = self.radice / 'passaggio.md'
+        passaggio.write_text('La luce del faro passa sul mare e torna indietro.', encoding='utf-8')
+        confronto = self.comando('strumenti/prosa.py', 'confronta', str(passaggio), 'il-faro')
+        self.assertIn('Corpus di voce: 0 parole da 0 racconti consolidati', confronto)
+        self.assertIn('voce/esempi.md non ha brani', confronto)
+        self.assertIn('# Deriva', self.comando('strumenti/prosa.py', 'deriva', 'il-faro', '--finestra', '40'))
+
     def test_preparazione_non_sovrascrive_e_completa_file_mancanti(self):
-        self.assertEqual(len(prepara.prepara(self.radice)), 5)
+        self.assertEqual(len(prepara.prepara(self.radice)), 6)
         profilo = self.radice / 'voce/profilo.md'
         privato = b'Profilo locale da conservare\r\n'
         profilo.write_bytes(privato)
@@ -66,11 +80,12 @@ class DistribuzioneTest(unittest.TestCase):
         privati = ['racconti/inedito/testo.md', 'racconti/inedito/materiali/proposta.md',
                    'racconti/_modello/appunti-privati.md', 'bozze/inedito.txt',
                    'voce/profilo.md', 'voce/esempi.md', 'voce/scelte-redazionali.md',
-                   'strumenti/stilemi_extra.txt', '.claude/settings.local.json',
+                   'strumenti/stilemi_extra.txt', 'strumenti/marcatori_voce.txt',
+                   '.claude/settings.local.json',
                    '.claude/settings.json', '.codex/config.toml', '.env',
                    'credentials.json', 'esportazione.docx', 'archivio/registro.md']
         pubblici = ['racconti/_modello/scheda.md', 'racconti/_modello/stato.md',
-                    'modelli/voce/profilo.md', 'esempi/il-faro.md',
+                    'modelli/voce/profilo.md', 'modelli/marcatori_voce.txt', 'esempi/il-faro.md',
                     '.agents/skills/racconto-nuovo/SKILL.md',
                     '.claude/skills/racconto-nuovo/SKILL.md', 'strumenti/prosa.py']
         for percorso in privati + pubblici:

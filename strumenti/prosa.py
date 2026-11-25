@@ -21,6 +21,14 @@ Uso:
   python -X utf8 strumenti/prosa.py conta <racconto>             parole, battute, distanza dai limiti
   python -X utf8 strumenti/prosa.py controlla <racconto> [--salva]
   python -X utf8 strumenti/prosa.py confronta <passaggio> <racconto>
+                                       profilo del passaggio contro le bande dello stesso racconto
+                                       e del corpus di voce, distanza e parole che la spiegano
+  python -X utf8 strumenti/prosa.py voce [--salva]                misure riproducibili del corpus di voce
+                                       (racconti consolidati, frasi senza coincidenze) e affidabilità
+                                       (con --salva: voce/misure/AAAA-MM-GG-misure.md)
+  python -X utf8 strumenti/prosa.py deriva <racconto> [--finestra N]
+                                       finestra mobile lungo il racconto contro il corpus di voce
+                                       (N parole, 200 se omesso)
   python -X utf8 strumenti/prosa.py dialoghi <racconto> [--salva]
   python -X utf8 strumenti/prosa.py dividi <racconto>            testo.md -> scene/NN.md sui separatori
   python -X utf8 strumenti/prosa.py unisci <racconto>            testo.md -> testo-unito.md (copia)
@@ -37,6 +45,7 @@ import datetime
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import statistics
@@ -109,10 +118,13 @@ STILEMI = [
 ]
 
 # Tratti dell'italiano generato misurati da `confronta` (officina/difetti-ai.md, parte 1).
+# Connettivi di raccordo saggistico [F33]. «quindi», «invece» e «comunque» sono anche connettivi
+# del parlato e del periodo per aggiunte: si contano a parte, senza segnale.
 CONNETTIVI = [
-    "inoltre", "tuttavia", "pertanto", "dunque", "quindi", "infatti", "comunque", "invece",
+    "inoltre", "tuttavia", "pertanto", "dunque", "infatti",
     "in questo modo", "in particolare", "allo stesso tempo", "d'altra parte", "d’altra parte",
 ]
+CONNETTIVI_DESCRITTIVI = ["quindi", "invece", "comunque"]
 RE_GERUNDIO_CODA = re.compile(
     r",\s*(permettendo|contribuendo|rendendo|consentendo|offrendo|creando|lasciando|facendo)\b", re.IGNORECASE
 )
@@ -174,6 +186,7 @@ RE_SIMILITUDINE = re.compile(
     r"\b(?:sembra|sembrava|pare|pareva) un['’]",
     re.IGNORECASE,
 )
+RE_COME = re.compile(r"\bcome\b", re.IGNORECASE)
 SIMILITUDINI_CAPOVERSO = (3, 120)  # tre similitudini entro 120 parole dello stesso capoverso
 
 # Ritmo locale (officina/punteggiatura-e-ritmo.md): soglie euristiche dell'officina.
@@ -1083,31 +1096,521 @@ def cmd_controlla(racconto, salva=False):
         print(f"Salvato in {dest}")
 
 
-def profilo_testo(testo):
-    n = len(parole(testo)) or 1
+# --------------------------------------------------------------------------- voce misurata
+# Misure descrittive della voce, lette contro la variazione dei testi dell'autore
+# (officina/stilometria.md). Non attribuiscono un testo e non dicono se è buono.
+
+# Gruppi del profilo numerico: la voce dell'autore, i segnali dell'italiano generato
+# discussi in officina/difetti-ai.md (parte 1) e ritmo e punteggiatura.
+GRUPPO_RITMO = "Ritmo e punteggiatura"
+GRUPPO_VOCE = "Tratti di voce (descrittivi)"
+GRUPPO_SEGNALI = "Segnali dell'italiano generato [F32][F33][F34]"
+
+# Pronomi personali e clitici esclusi dalla distanza: dipendono dal punto di vista del
+# racconto, non dallo stile (Hoover 2004 [F59]). Non si tolgono gli omografi degli articoli.
+PRONOMI = set("""
+io tu lui lei noi voi loro egli ella esso essa essi esse me te sé se mi ti ci vi
+""".split())
+
+MFW = 100                 # parole più frequenti del riferimento usate dalla distanza
+MFW_MINIMO = 3            # occorrenze minime nel riferimento per entrare fra le parole
+CULLING = 0.7             # una parola concentrata per oltre il 70% in un solo racconto esce [F59]
+CULLING_PAROLE = 500      # il culling vale solo fra racconti di almeno 500 parole di riferimento
+MIN_FINESTRE = 8          # sotto questo numero di finestre non si calcola una banda
+MIN_CONTRASTO = 5         # finestre minime di contrasto per l'affidabilità
+BANDA = (0.05, 0.95)      # la banda: dal 5° al 95° percentile delle finestre dell'autore
+SOGLIA_INTERO = 0.9       # racconto che coincide oltre il 90%: escluso dal corpus (vedi corpus_voce)
+LUNGHEZZE_AFFIDABILITA = (50, 100, 200, 400, 800)
+FINESTRA_DERIVA = 200
+
+
+def fmt(x, cifre=1):
+    return f"{x:.{cifre}f}".replace(".", ",")
+
+
+def quantile(valori, p):
+    """Quantile con interpolazione lineare; valori non vuoti."""
+    s = sorted(valori)
+    if len(s) == 1:
+        return s[0]
+    pos = p * (len(s) - 1)
+    i = int(pos)
+    if i + 1 >= len(s):
+        return s[-1]
+    return s[i] + (s[i + 1] - s[i]) * (pos - i)
+
+
+def marcatori_voce():
+    """Espressioni di strumenti/marcatori_voce.txt, una per riga; vuoto se il file manca."""
+    f = RADICE / "strumenti" / "marcatori_voce.txt"
+    lista = []
+    if not f.exists():
+        return lista
+    for numero, riga in enumerate(f.read_text(encoding="utf-8-sig").splitlines(), 1):
+        pat = riga.strip()
+        if not pat or pat.startswith("#"):
+            continue
+        try:
+            lista.append(re.compile(r"\b(?:" + pat + r")\b", re.IGNORECASE))
+        except re.error as exc:
+            errore(f"regex non valida in {f}, riga {numero}: {exc}")
+    return lista
+
+
+def conta_marcatori(testo, marcatori):
+    return sum(len(m.findall(testo)) for m in marcatori)
+
+
+def domande_narrazione(testo):
+    """Frasi di narrazione che finiscono con un punto interrogativo."""
+    return sum(1 for f in frasi(togli_dialoghi(testo)) if re.search(r"\?[»”\"]*\s*$", f))
+
+
+def profilo_testo(testo, marcatori=None):
+    """Profilo numerico di un testo: chiave -> valore. I gruppi sono in GRUPPI_PROFILO."""
+    marcatori = marcatori_voce() if marcatori is None else marcatori
+    ws = parole(testo)
+    n = len(ws) or 1
+    lung = [len(parole(f)) for f in frasi(testo)] or [0]
     rt = statistiche_ritmo(testo)
     low = testo.lower()
-    return {
-        "parole": n,
+    narr = togli_dialoghi(testo)
+    p = {
         "media frase": rt["media"],
         "deviazione frase": rt["dev"],
+        "frase: 10° percentile": round(quantile(lung, 0.1), 1),
+        "frase: mediana": round(quantile(lung, 0.5), 1),
+        "frase: 90° percentile": round(quantile(lung, 0.9), 1),
         "frasi brevi %": round(100 * rt["brevi"] / rt["frasi"], 1) if rt["frasi"] else 0,
         "virgole ‰": per_mille(testo.count(","), n),
-        "punto e virgola ‰": per_mille(testo.count(";"), n),
         "due punti ‰": per_mille(testo.count(":"), n),
-        "esclamativi ‰": per_mille(testo.count("!"), n),
         "interrogativi ‰": per_mille(testo.count("?"), n),
-        "puntini ‰": per_mille(testo.count("…") + testo.count("..."), n),
         "parentesi ‰": per_mille(testo.count("("), n),
-        "lineette nella narrazione ‰": per_mille(len(re.findall(r"\s[—–]\s", togli_dialoghi(testo))), n),
-        "avverbi -mente ‰": per_mille(sum(1 for w in parole(testo) if w.lower().endswith("mente") and len(w) > 7), n),
+        "punto e virgola nella narrazione ‰": per_mille(narr.count(";"), n),
+        "esclamativi nella narrazione ‰": per_mille(narr.count("!"), n),
+        "puntini nella narrazione ‰": per_mille(narr.count("…") + narr.count("..."), n),
+        "lineette nella narrazione ‰": per_mille(len(re.findall(r"\s[—–]\s", narr)), n),
+        "lunghezza media parola": round(statistics.mean(len(w) for w in ws), 2) if ws else 0,
+        "avverbi -mente ‰": per_mille(sum(1 for w in ws if w.lower().endswith("mente") and len(w) > 7), n),
+    }
+    if marcatori:
+        p["marcatori di voce ‰"] = per_mille(conta_marcatori(testo, marcatori), n)
+    p.update({
+        "domande nella narrazione ‰": per_mille(domande_narrazione(testo), n),
+        "similitudini strette ‰": per_mille(len(RE_SIMILITUDINE.findall(testo)), n),
+        "«come» ‰": per_mille(len(RE_COME.findall(testo)), n),
         "gerundi ‰": per_mille(len(re.findall(r"\b\w+(ando|endo)\b", low)), n),
+        "quindi, invece, comunque ‰": per_mille(
+            sum(len(re.findall(r"\b" + c + r"\b", low)) for c in CONNETTIVI_DESCRITTIVI), n),
         "gerundi in coda ‰": per_mille(len(RE_GERUNDIO_CODA.findall(testo)), n),
-        "connettivi ‰": per_mille(sum(len(re.findall(r"\b" + re.escape(c) + r"\b", low)) for c in CONNETTIVI), n),
+        "connettivi di raccordo ‰": per_mille(
+            sum(len(re.findall(r"\b" + re.escape(c) + r"\b", low)) for c in CONNETTIVI), n),
         "terne ‰": per_mille(len(RE_TERNA.findall(testo)), n),
         "«non (è) solo… ma» ‰": per_mille(len(re.findall(r"\bnon (?:è |era )?solo\b[^.]{0,80}\bma\b", low)), n),
-        "lunghezza media parola": round(statistics.mean(len(w) for w in parole(testo)), 2) if parole(testo) else 0,
-    }
+    })
+    return p
+
+
+GRUPPI_PROFILO = {
+    GRUPPO_VOCE: ("marcatori di voce ‰", "domande nella narrazione ‰", "similitudini strette ‰",
+                  "«come» ‰", "gerundi ‰", "quindi, invece, comunque ‰"),
+    GRUPPO_SEGNALI: ("gerundi in coda ‰", "connettivi di raccordo ‰", "terne ‰", "«non (è) solo… ma» ‰"),
+}
+
+
+def gruppo_di(chiave):
+    for g, chiavi in GRUPPI_PROFILO.items():
+        if chiave in chiavi:
+            return g
+    return GRUPPO_RITMO
+
+
+# ---- frasi, provenienza e corpus
+
+def frasi_racconto(cartella, materiali=None):
+    """Frasi di testo.md con capoverso, stacco e quota di parole coincidenti con i materiali.
+
+    La coincidenza è quella di «provenienza» (sequenze di 8 parole), riportata alla frase.
+    """
+    testo = testo_racconto(cartella)[0][1]
+    materiali = materiali_marcati(cartella) if materiali is None else materiali
+    m = misura_provenienza(cartella, materiali) if materiali else None
+    blocchi = m["blocchi"] if m else capoversi(testo)
+    coperte = m["coperte"] if m else None
+    out, k, stacco = [], 0, False
+    for i, blocco in enumerate(blocchi):
+        norm = parole_normalizzate(blocco)
+        flag = [bool(c) for c in coperte[k:k + len(norm)]] if coperte else [False] * len(norm)
+        k += len(norm)
+        tipo, vis = visibile_capoverso(blocco)
+        if tipo == "stacco" or RE_TITOLO.fullmatch(blocco.strip()) or not norm:
+            stacco = True
+            continue
+        pezzi = [f for _, f in frasi_posizionate(vis)]
+        conti = [len(parole_normalizzate(f)) for f in pezzi]
+        if sum(conti) != len(flag):  # tokenizzazione diversa: si riporta la quota del capoverso
+            quota = sum(flag) / len(flag)
+            quote = [quota] * len(pezzi)
+        else:
+            quote, j = [], 0
+            for c in conti:
+                quote.append(sum(flag[j:j + c]) / c if c else 0.0)
+                j += c
+        for j, (f, q) in enumerate(zip(pezzi, quote)):
+            out.append({"racconto": cartella.name, "indice": len(out), "capoverso": i + 1,
+                        "testo": f.strip(), "parole": len(parole(f)), "quota": q,
+                        "nuovo_capoverso": j == 0, "stacco_prima": stacco and j == 0})
+        stacco = False
+    return out
+
+
+def frasi_da_testo(testo, racconto="testo"):
+    """Frasi di un testo semplice, senza provenienza: un solo segmento per capoverso consecutivo."""
+    out = []
+    for i, blocco in enumerate(capoversi(testo_visibile(testo))):
+        for j, (_, f) in enumerate(frasi_posizionate(blocco)):
+            out.append({"racconto": racconto, "indice": len(out), "capoverso": i + 1, "testo": f.strip(),
+                        "parole": len(parole(f)), "quota": 0.0, "nuovo_capoverso": j == 0,
+                        "stacco_prima": False})
+    return out
+
+
+def segmenti(frasi_, tieni):
+    """Sequenze di frasi consecutive che soddisfano tieni, spezzate da stacchi e frasi escluse."""
+    out, corrente = [], []
+    for f in frasi_:
+        if f["stacco_prima"] and corrente:
+            out.append(corrente)
+            corrente = []
+        if tieni(f):
+            corrente.append(f)
+        elif corrente:
+            out.append(corrente)
+            corrente = []
+    if corrente:
+        out.append(corrente)
+    return out
+
+
+def unisci_frasi(seq):
+    parti = []
+    for j, f in enumerate(seq):
+        if j:
+            parti.append("\n" if f["nuovo_capoverso"] else " ")
+        parti.append(f["testo"])
+    return "".join(parti)
+
+
+def testo_segmenti(segs):
+    return "\n\n".join(unisci_frasi(s) for s in segs)
+
+
+def parole_segmenti(segs):
+    return sum(f["parole"] for s in segs for f in s)
+
+
+def sequenze_di(testo, n=None):
+    n = n or SEQUENZA_PROVENIENZA
+    p = parole_normalizzate(testo)
+    return {tuple(p[i:i + n]) for i in range(len(p) - n + 1)}
+
+
+def coperta_da(frase, sequenze, n=None):
+    """Quota delle parole della frase che stanno in una sequenza di n parole presente altrove."""
+    n = n or SEQUENZA_PROVENIENZA
+    p = parole_normalizzate(frase)
+    if not p or not sequenze:
+        return 0.0
+    coperte = [False] * len(p)
+    for i in range(len(p) - n + 1):
+        if tuple(p[i:i + n]) in sequenze:
+            for j in range(i, i + n):
+                coperte[j] = True
+    return sum(coperte) / len(p)
+
+
+def senza(segs, testo):
+    """I segmenti senza le frasi che coincidono per metà o più con testo (il passaggio, i brani).
+
+    Con un testo più corto di una sequenza, la sequenza è il testo intero.
+    """
+    n = min(SEQUENZA_PROVENIENZA, len(parole_normalizzate(testo)))
+    if not n:
+        return segs
+    seq = sequenze_di(testo, n)
+    return [s for seg in segs for s in segmenti(seg, lambda f: coperta_da(f["testo"], seq, n) < 0.5)]
+
+
+def zona_autore(frasi_):
+    return segmenti(frasi_, lambda f: f["quota"] == 0)
+
+
+def zona_contrasto(frasi_):
+    return segmenti(frasi_, lambda f: f["quota"] >= 0.5)
+
+
+def quota_racconto(frasi_):
+    tot = sum(f["parole"] for f in frasi_)
+    return sum(f["parole"] * f["quota"] for f in frasi_) / tot if tot else 0.0
+
+
+def racconti_con_testo():
+    if not RACCONTI.is_dir():
+        return []
+    return [c for c in sorted(RACCONTI.iterdir())
+            if c.is_dir() and not c.name.startswith("_") and (c / "testo.md").exists()]
+
+
+def consolidato(cartella):
+    return leggi_scheda(cartella, {"stato"}).get("stato") == "consolidato"
+
+
+def racconti_consolidati():
+    return [c for c in racconti_con_testo() if consolidato(c)]
+
+
+def corpus_voce():
+    """Il corpus di voce: racconti consolidati, solo frasi senza coincidenze con i materiali.
+
+    Il contrasto sono le frasi coincidenti per metà o più, di ogni racconto: servono a misurare
+    l'affidabilità, mai come riferimento. Un racconto coincidente oltre SOGLIA_INTERO si esclude
+    da entrambi: di solito un materiale lo riporta per intero, e la coincidenza non distingue più.
+    """
+    corpus = {"autore": {}, "contrasto": {}, "esclusi": []}
+    for c in racconti_con_testo():
+        fr = frasi_racconto(c)
+        quota = quota_racconto(fr)
+        if quota > SOGLIA_INTERO:
+            corpus["esclusi"].append((c.name, f"coincide per il {percentuale(quota, 1)} con i materiali: "
+                                      "probabile materiale che riporta il testo intero"))
+            continue
+        if consolidato(c):
+            autore = zona_autore(fr)
+            if autore:
+                corpus["autore"][c.name] = autore
+        contrasto = zona_contrasto(fr)
+        if contrasto:
+            corpus["contrasto"][c.name] = contrasto
+    return corpus
+
+
+def brani_esempi():
+    """Il testo dei brani di voce/esempi.md (sezioni con la riga «- Racconto:»)."""
+    f = RADICE / "voce" / "esempi.md"
+    if not f.exists():
+        return ""
+    testo = re.sub(r"(?ms)^```.*?^```[ \t]*$", "", f.read_text(encoding="utf-8-sig"))
+    brani = []
+    for sezione in re.split(r"(?m)^## ", testo)[1:]:
+        righe = sezione.splitlines()[1:]
+        piene = [r for r in righe if r.strip()]
+        if not piene or not piene[0].lstrip().startswith("- Racconto:"):
+            continue
+        corpo = "\n".join(righe[righe.index(piene[0]) + 1:]).strip()
+        if corpo:
+            brani.append(corpo)
+    return "\n\n".join(brani)
+
+
+# ---- finestre, bande e distanza
+
+def finestre(segs, n):
+    """Finestre di almeno n parole a frasi intere; partono ogni mezza finestra circa."""
+    out = []
+    for seg in segs:
+        cum = [0]
+        for f in seg:
+            cum.append(cum[-1] + f["parole"])
+        ultimo = None
+        for i in range(len(seg)):
+            if ultimo is not None and cum[i] - cum[ultimo] < n / 2:
+                continue
+            j = i
+            while j < len(seg) and cum[j] - cum[i] < n:
+                j += 1
+            if cum[j] - cum[i] < n:
+                break
+            out.append({"testo": unisci_frasi(seg[i:j]), "parole": cum[j] - cum[i],
+                        "chiave": (seg[i]["racconto"], seg[i]["indice"], seg[j - 1]["indice"]),
+                        "frasi": seg[i:j]})
+            ultimo = i
+    return out
+
+
+def sovrapposte(a, b):
+    return a[0] == b[0] and a[1] <= b[2] and b[1] <= a[2]
+
+
+def banda(valori, x):
+    """Posizione di x fra i valori: (etichetta, rango 0-1, 5° percentile, 95° percentile)."""
+    if len(valori) < MIN_FINESTRE:
+        return ("poche finestre", None, None, None)
+    basso, alto = quantile(valori, BANDA[0]), quantile(valori, BANDA[1])
+    rango = (sum(1 for v in valori if v < x) + 0.5 * sum(1 for v in valori if v == x)) / len(valori)
+    if x > max(valori):
+        e = "oltre il massimo osservato"
+    elif x < min(valori):
+        e = "sotto il minimo osservato"
+    elif x > alto:
+        e = "oltre il 95° percentile"
+    elif x < basso:
+        e = "sotto il 5° percentile"
+    else:
+        e = "dentro"
+    return (e, rango, basso, alto)
+
+
+def fuori(etichetta):
+    return etichetta not in ("dentro", "poche finestre")
+
+
+def scegli_parole(testi_per_racconto, quante=MFW):
+    """Parole più frequenti del riferimento, senza pronomi personali e nomi propri, con culling."""
+    tot, maiuscole, per = Counter(), Counter(), {}
+    for racconto, testo in testi_per_racconto.items():
+        c = per.setdefault(racconto, Counter())
+        for w in parole(testo):
+            lw = w.lower()
+            tot[lw] += 1
+            c[lw] += 1
+            if w[0].isupper():
+                maiuscole[lw] += 1
+    lunghi = {r: sum(c.values()) for r, c in per.items() if sum(c.values()) >= CULLING_PAROLE}
+    scelte = []
+    for w, c in tot.most_common():
+        if c < MFW_MINIMO or len(scelte) >= quante:
+            break
+        if w in PRONOMI or maiuscole[w] > c / 2:
+            continue
+        if len(lunghi) >= 2:
+            rel = [per[r][w] / lunghi[r] for r in lunghi]
+            if max(rel) > CULLING * sum(rel):
+                continue
+        scelte.append(w)
+    return scelte
+
+
+def vettore(testo, vocabolario):
+    ws = [w.lower() for w in parole(testo)]
+    n = len(ws) or 1
+    c = Counter(ws)
+    return [c[w] / n for w in vocabolario]
+
+
+def medie_dev(vettori):
+    if not vettori:
+        return [], []
+    k = len(vettori[0])
+    media = [sum(v[i] for v in vettori) / len(vettori) for i in range(k)]
+    dev = [math.sqrt(sum((v[i] - media[i]) ** 2 for v in vettori) / len(vettori)) for i in range(k)]
+    return media, dev
+
+
+def zeta(v, media, dev):
+    return [(x - m) / d if d else 0.0 for x, m, d in zip(v, media, dev)]
+
+
+def delta(v, media, dev):
+    """Delta di Burrows rispetto alle finestre: media degli scarti assoluti in z-score [F58][F59]."""
+    z = [abs(x) for x, d in zip(zeta(v, media, dev), dev) if d]
+    return sum(z) / len(z) if z else 0.0
+
+
+def coseno(a, b):
+    """Distanza coseno fra due vettori di z-score (Cosine Delta [F60])."""
+    na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
+    if not na or not nb:
+        return 0.0
+    return 1 - sum(x * y for x, y in zip(a, b)) / (na * nb)
+
+
+def statistiche_senza(vettori, chiavi, chiave):
+    """Medie e deviazioni delle finestre che non si sovrappongono a chiave."""
+    altri = [v for v, c in zip(vettori, chiavi) if not sovrapposte(c, chiave)]
+    return medie_dev(altri), len(altri)
+
+
+class Riferimento:
+    """Finestre di riferimento di una lunghezza, con le parole e le distanze delle finestre stesse."""
+
+    def __init__(self, segs, n, vocabolario=None):
+        self.n = n
+        self.finestre = finestre(segs, n)
+        per = {}
+        for s in segs:
+            per.setdefault(s[0]["racconto"], []).append(unisci_frasi(s))
+        self.vocabolario = vocabolario or scegli_parole({r: "\n\n".join(t) for r, t in per.items()})
+        self.vettori = [vettore(f["testo"], self.vocabolario) for f in self.finestre]
+        self.chiavi = [f["chiave"] for f in self.finestre]
+        self.media, self.dev = medie_dev(self.vettori)
+        self._propri = None
+
+    def basta(self):
+        return len(self.finestre) >= MIN_FINESTRE and bool(self.vocabolario)
+
+    def delta_di(self, testo, chiave=None):
+        v = vettore(testo, self.vocabolario)
+        if chiave is None:
+            return delta(v, self.media, self.dev)
+        (media, dev), quante = statistiche_senza(self.vettori, self.chiavi, chiave)
+        return delta(v, media, dev) if quante >= MIN_FINESTRE else None
+
+    def delta_propri(self):
+        """Distanza di ogni finestra dalle altre che non la toccano (lasciata fuori una alla volta)."""
+        if self._propri is None:
+            self._propri = []
+            for v, c in zip(self.vettori, self.chiavi):
+                (media, dev), quante = statistiche_senza(self.vettori, self.chiavi, c)
+                if quante >= MIN_FINESTRE:
+                    self._propri.append(delta(v, media, dev))
+        return self._propri
+
+    def spiega(self, testo, quante=5):
+        """Le parole che più pesano nella distanza: in eccesso e mancanti, con i conteggi attesi."""
+        ws = parole(testo)
+        n = len(ws) or 1
+        c = Counter(w.lower() for w in ws)
+        voci = []
+        for w, z, m in zip(self.vocabolario, zeta(vettore(testo, self.vocabolario), self.media, self.dev),
+                           self.media):
+            voci.append((z, w, c[w], m * n))
+        eccesso = [v for v in sorted(voci, reverse=True) if v[0] > 1.5][:quante]
+        mancanti = [v for v in sorted(voci) if v[0] < -1.5 and v[3] >= 1.5][:quante]
+        return eccesso, mancanti
+
+
+def descrivi_parole(voci):
+    return ", ".join(f"«{w}» {c} (attese {fmt(a)})" for _, w, c, a in voci) or "nessuna"
+
+
+def auc(positivi, negativi):
+    """Probabilità che un positivo superi un negativo (area sotto la curva ROC, come in PAN [F65])."""
+    if not positivi or not negativi:
+        return None
+    vinte = sum((p > q) + 0.5 * (p == q) for p in positivi for q in negativi)
+    return vinte / (len(positivi) * len(negativi))
+
+
+def descrivi_banda(b, cifre=1):
+    e, rango, basso, alto = b
+    if rango is None:
+        return e
+    return f"{e} ({fmt(100 * rango, 0)}°; banda {fmt(basso, cifre)}–{fmt(alto, cifre)})"
+
+
+def oltre(etichetta):
+    """Per le distanze conta solo lo scarto verso l'alto: sotto la banda vuol dire più vicino alla
+    media delle finestre dell'autore, e la calibrazione non lo distingue (officina/stilometria.md)."""
+    return etichetta in ("oltre il 95° percentile", "oltre il massimo osservato")
+
+
+def colonna_profilo(nome, segs, n, marcatori, valori_passaggio):
+    """Per ogni misura, la banda delle finestre del riferimento; None se non basta testo."""
+    fin = finestre(segs, n)
+    if len(fin) < MIN_FINESTRE:
+        return None, len(fin)
+    profili = [profilo_testo(f["testo"], marcatori) for f in fin]
+    return {k: banda([p[k] for p in profili], v) for k, v in valori_passaggio.items()}, len(fin)
 
 
 def cmd_confronta(passaggio, racconto):
@@ -1115,52 +1618,326 @@ def cmd_confronta(passaggio, racconto):
     p = Path(passaggio)
     if not p.exists():
         errore(f"passaggio non trovato: {passaggio}")
-    nuovo = p.read_text(encoding="utf-8-sig")
-    resto = "\n\n".join(t for _, t in testo_racconto(cartella))
-    # Se il passaggio è già nel testo, lo si toglie dal termine di confronto.
-    resto = resto.replace(nuovo.strip(), "")
-    a, b = profilo_testo(nuovo), profilo_testo(resto)
-    print(f"# Confronto: {p.name} contro il resto di {cartella.name}\n")
-    print(f"Passaggio: {a['parole']} parole · resto del racconto: {b['parole']} parole.")
-    if a["parole"] < 80:
-        print("Attenzione: sotto le 80 parole le frequenze sono poco affidabili; guarda soprattutto ritmo e formule.\n")
-    print("| Misura | Passaggio | Resto | Segnale |")
-    print("| --- | ---: | ---: | --- |")
-    segnali = 0
-    for k in a:
-        if k == "parole":
+    nuovo = testo_visibile(p.read_text(encoding="utf-8-sig"))
+    marcatori = marcatori_voce()
+    a = profilo_testo(nuovo, marcatori)
+    n = len(parole(nuovo))
+    fr = frasi_racconto(cartella)
+    quota = quota_racconto(fr)
+    stesso = senza(zona_autore(fr), nuovo) if quota <= SOGLIA_INTERO else []
+    corpus = corpus_voce()
+    corpo = senza([s for segs in corpus["autore"].values() for s in segs], nuovo)
+    brani = brani_esempi()
+    out = []
+    w = out.append
+    w(f"# Confronto: {p.name} contro {cartella.name} e i testi dell'autore\n")
+    w("Le bande sono la variazione dei testi dell'autore su finestre della stessa lunghezza del passaggio "
+      "(dal 5° al 95° percentile). Dicono dove il passaggio esce da quella variazione, non che cosa "
+      "correggere: non c'è un valore da raggiungere, e la misura non dice chi ha scritto il testo "
+      "(officina/stilometria.md).\n")
+    w(f"- Passaggio: {n} parole.")
+    if quota > SOGLIA_INTERO:
+        w(f"- Stesso racconto: coincide per il {percentuale(quota, 1)} con i materiali dell'assistente; "
+          "nessuna zona di riferimento.")
+    else:
+        w(f"- Stesso racconto: {parole_segmenti(stesso)} parole senza coincidenze con i materiali "
+          "(le frasi del passaggio sono tolte).")
+    w(f"- Corpus di voce: {parole_segmenti(corpo)} parole da {len(corpus['autore'])} racconti consolidati"
+      + (f"; esclusi: {'; '.join(f'{r} ({m})' for r, m in corpus['esclusi'])}" if corpus["esclusi"] else "")
+      + ".")
+    if not marcatori:
+        w("- Marcatori di voce: strumenti/marcatori_voce.txt è vuoto o assente; non contati.")
+    w("")
+    col_r, fin_r = colonna_profilo("racconto", stesso, n, marcatori, a)
+    col_c, fin_c = colonna_profilo("corpus", corpo, n, marcatori, a)
+    w(f"Finestre di almeno {n} parole: {fin_r} nello stesso racconto, {fin_c} nel corpus"
+      f" (servono almeno {MIN_FINESTRE} per una banda).\n")
+    scarti = {}
+    for gruppo in (GRUPPO_VOCE, GRUPPO_SEGNALI, GRUPPO_RITMO):
+        chiavi = [k for k in a if gruppo_di(k) == gruppo]
+        w(f"## {gruppo}\n")
+        w("| Misura | Passaggio | Stesso racconto | Corpus |")
+        w("| --- | ---: | --- | --- |")
+        for k in chiavi:
+            celle = []
+            for nome, col in (("stesso racconto", col_r), ("corpus", col_c)):
+                if col is None:
+                    celle.append("non abbastanza testo")
+                    continue
+                celle.append(descrivi_banda(col[k]))
+                if fuori(col[k][0]):
+                    scarti.setdefault(f"{k}: {col[k][0]}", []).append(nome)
+            w(f"| {k} | {fmt(a[k], 2 if k == 'lunghezza media parola' else 1)} | {celle[0]} | {celle[1]} |")
+        w("")
+    w("## Distanza (Delta sulle parole più frequenti)\n")
+    w("Media degli scarti in z-score sulle parole più frequenti del riferimento, senza pronomi personali "
+      "e nomi propri [F58][F59]; la banda viene dalle finestre dell'autore lasciate fuori una alla volta.\n")
+    for nome, segs in (("Stesso racconto", stesso), ("Corpus", corpo)):
+        rif = Riferimento(segs, n)
+        if not rif.basta() or len(rif.delta_propri()) < MIN_FINESTRE:
+            w(f"- {nome}: non abbastanza testo ({len(rif.finestre)} finestre).")
             continue
-        va, vb = a[k], b[k]
-        segnale = ""
-        if k in ("media frase", "deviazione frase", "lunghezza media parola"):
-            if vb and (va / vb > 1.3 or va / vb < 0.7):
-                segnale = "scarto"
-        elif k == "frasi brevi %":
-            if abs(va - vb) > 12:
-                segnale = "scarto"
+        d = rif.delta_di(nuovo)
+        b = banda(rif.delta_propri(), d)
+        if oltre(b[0]):
+            scarti.setdefault(f"distanza: {b[0]}", []).append(nome.lower())
+        eccesso, mancanti = rif.spiega(nuovo)
+        w(f"- {nome}: {fmt(d, 2)}, {descrivi_banda(b, 2)}; {len(rif.vocabolario)} parole.")
+        w(f"  - più presenti del solito: {descrivi_parole(eccesso)}")
+        w(f"  - meno presenti del solito: {descrivi_parole(mancanti)}")
+    if brani:
+        # Se il passaggio è uno dei brani, o li cita, quelle frasi escono dal termine di confronto.
+        seq = sequenze_di(nuovo)
+        brani = " ".join(f for _, f in frasi_posizionate(brani) if coperta_da(f, seq) < 0.5)
+    if brani:
+        filtrato = senza(corpo, brani)
+        rif = Riferimento(filtrato, n)
+        if rif.basta():
+            zb = zeta(vettore(brani, rif.vocabolario), rif.media, rif.dev)
+            propri = [coseno(zeta(v, rif.media, rif.dev), zb) for v in rif.vettori]
+            d = coseno(zeta(vettore(nuovo, rif.vocabolario), rif.media, rif.dev), zb)
+            b = banda(propri, d)
+            w(f"- Brani approvati (voce/esempi.md), distanza coseno [F60]: {fmt(d, 2)}, {descrivi_banda(b, 2)}; "
+              "la banda viene dalle finestre del corpus senza i brani.")
+            if oltre(b[0]):
+                scarti.setdefault(f"distanza dai brani: {b[0]}", []).append("brani approvati")
         else:
-            # Confronto sui conteggi attesi nel passaggio, per non segnalare assenze normali in un testo breve.
-            atteso = round(vb * a["parole"] / 1000, 1)
-            osservato = round(va * a["parole"] / 1000, 1)
-            if (osservato >= 2 and osservato > 2 * max(atteso, 0.5)) or (atteso >= 3 and osservato < atteso / 3):
-                segnale = "scarto"
-        if segnale:
-            segnali += 1
-        print(f"| {k} | {va} | {vb} | {segnale} |")
+            w("- Brani approvati: non abbastanza testo nel corpus per una banda.")
+    else:
+        w("- Brani approvati: voce/esempi.md non ha brani, o il passaggio li contiene tutti.")
     stil = [m.group(0) for pat in stilemi() for m in re.finditer(pat, nuovo, re.IGNORECASE)]
-    print()
+    w("")
     if stil:
-        print("Formule di repertorio nel passaggio: " + ", ".join(f"«{s}»" for s in stil))
-        segnali += len(stil)
-    # Parole frequenti nel passaggio e assenti o rare nel resto.
-    fa = Counter(w.lower() for w in parole(nuovo) if len(w) >= 5 and w.lower() not in STOPWORDS)
-    fb = Counter(w.lower() for w in parole(resto))
-    estranee = [w for w, c in fa.items() if c >= 2 and fb[w] == 0]
+        w("Formule di repertorio nel passaggio: " + ", ".join(f"«{s}»" for s in stil))
+    resto = testo_segmenti(stesso)
+    fa = Counter(x.lower() for x in parole(nuovo) if len(x) >= 5 and x.lower() not in STOPWORDS)
+    fb = Counter(x.lower() for x in parole(resto))
+    estranee = [x for x, c in fa.items() if c >= 2 and fb[x] == 0]
     if estranee:
-        print("Parole ripetute nel passaggio e assenti nel resto: " + ", ".join(estranee[:10]))
-    print()
-    print(f"Esito: {'nessuno scarto evidente' if segnali == 0 else str(segnali) + ' segnali da guardare'}. "
-          "Uno scarto non è un errore: dice dove il passaggio suona diverso dal racconto.")
+        w("Parole ripetute nel passaggio e assenti nel resto: " + ", ".join(estranee[:10]))
+    w("")
+    w("## Esito\n")
+    if scarti or stil:
+        w("Fuori dalla variazione dell'autore a questa lunghezza:")
+        for voce, dove in scarti.items():
+            w(f"- {voce} ({', '.join(dove)})")
+        if stil:
+            w(f"- formule di repertorio: {len(stil)}")
+    else:
+        w("Nessuna misura fuori dalla variazione dell'autore a questa lunghezza.")
+    w("\nUno scarto non è un errore: dice dove il passaggio suona diverso. Non si riscrive per riportare "
+      "un numero dentro la banda; quanto la misura distingue a questa lunghezza lo dice "
+      "`prosa.py voce` (affidabilità).")
+    print("\n".join(out))
+
+
+# ---- voce: misure riproducibili del corpus
+
+def affidabilita(corpus, marcatori):
+    """Per ogni lunghezza: quanto la distanza e i marcatori separano il contrasto dalle zone dell'autore."""
+    autore = [s for segs in corpus["autore"].values() for s in segs]
+    contrasto = [s for segs in corpus["contrasto"].values() for s in segs]
+    righe = []
+    for n in LUNGHEZZE_AFFIDABILITA:
+        rif = Riferimento(autore, n)
+        fc = finestre(contrasto, n)
+        propri = rif.delta_propri() if rif.basta() else []
+        if len(propri) < MIN_FINESTRE or len(fc) < MIN_CONTRASTO:
+            righe.append((n, len(rif.finestre), len(fc), None, None, None))
+            continue
+        dc = [rif.delta_di(f["testo"]) for f in fc]
+        a_delta = auc(dc, propri)
+        a_marc = None
+        if marcatori:
+            ma = [-per_mille(conta_marcatori(f["testo"], marcatori), f["parole"]) for f in rif.finestre]
+            mc = [-per_mille(conta_marcatori(f["testo"], marcatori), f["parole"]) for f in fc]
+            a_marc = auc(mc, ma)
+        fuori_banda = sum(1 for d in dc if fuori(banda(propri, d)[0])) / len(dc)
+        righe.append((n, len(rif.finestre), len(fc), a_delta, a_marc, fuori_banda))
+    return righe
+
+
+def variazione_tra_racconti(corpus):
+    """Quota delle finestre di un racconto fuori dalla banda costruita sugli altri (attesa: ~10%)."""
+    righe = []
+    for nome, segs in corpus["autore"].items():
+        altri = [s for r, ss in corpus["autore"].items() if r != nome for s in ss]
+        if not altri:
+            continue
+        for n in LUNGHEZZE_AFFIDABILITA:
+            rif = Riferimento(altri, n)
+            propri = rif.delta_propri() if rif.basta() else []
+            fs = finestre(segs, n)
+            if len(propri) < MIN_FINESTRE or not fs:
+                righe.append((nome, n, len(fs), None))
+                continue
+            quota = sum(1 for f in fs if fuori(banda(propri, rif.delta_di(f["testo"]))[0])) / len(fs)
+            righe.append((nome, n, len(fs), quota))
+    return righe
+
+
+def cmd_voce(salva=False):
+    corpus = corpus_voce()
+    marcatori = marcatori_voce()
+    out = []
+    w = out.append
+    w(f"# Misure di voce ({oggi()})\n")
+    w(f"- Generato: {datetime.datetime.now().astimezone().isoformat(timespec='seconds')}")
+    w("- Misure descrittive dei testi dell'autore. Non attribuiscono un testo e non dicono se è buono "
+      "(officina/stilometria.md).")
+    w("- Corpus: racconti con `stato: consolidato`; contano solo le frasi senza coincidenze con i materiali "
+      f"marcati dell'assistente (sequenze di {SEQUENZA_PROVENIENZA} parole, come «provenienza»).")
+    w("- Contrasto, solo per l'affidabilità e mai come riferimento: le frasi coincidenti per metà o più, di "
+      "tutti i racconti. È testo coincidente, non testo dell'assistente: può contenere frasi dell'autore "
+      "citate in un materiale (allora la separazione misurata è prudente) e può differire per forma, per "
+      "esempio più dialogo (allora la separazione è gonfiata).")
+    if corpus["contrasto"]:
+        w("- Contrasto per racconto: " + ", ".join(
+            f"{r} {parole_segmenti(s)} parole" for r, s in corpus["contrasto"].items()) + ".")
+    for r, m in corpus["esclusi"]:
+        w(f"- Escluso: {r}, {m}.")
+    if not marcatori:
+        w("- strumenti/marcatori_voce.txt è vuoto o assente: i marcatori di voce non si contano.")
+    w("")
+    if not corpus["autore"]:
+        w("Nessun racconto consolidato con frasi senza coincidenze: non c'è ancora un corpus di voce.")
+        testo_out = "\n".join(out) + "\n"
+        print(testo_out)
+        return
+    nomi = list(corpus["autore"])
+    profili = {r: profilo_testo(testo_segmenti(corpus["autore"][r]), marcatori) for r in nomi}
+    w("## Profilo per racconto (zone senza coincidenze)\n")
+    w("| Misura | " + " | ".join(nomi) + " | intervallo |")
+    w("| --- | " + " | ".join("---:" for _ in nomi) + " | --- |")
+    w("| parole | " + " | ".join(str(parole_segmenti(corpus["autore"][r])) for r in nomi) + " | |")
+    for k in profili[nomi[0]]:
+        valori = [profili[r][k] for r in nomi]
+        w(f"| {k} | " + " | ".join(fmt(v, 2 if k == 'lunghezza media parola' else 1) for v in valori)
+          + f" | {fmt(min(valori))}–{fmt(max(valori))} |")
+    w("")
+    w("## Similitudini: due conteggi diversi\n")
+    w("- **similitudini strette**: «come se», «come» seguito da articolo, «simile a», «sembra/pare un…» "
+      "(RE_SIMILITUDINE); prende anche alcuni paragoni semplici (*come gli altri*).")
+    w("- **«come»**: ogni occorrenza della parola, comprese le interrogative e i comparativi.\n")
+    w("| Racconto | Parole | Similitudini strette ‰ | «come» ‰ |")
+    w("| --- | ---: | ---: | ---: |")
+    for c in racconti_consolidati():
+        t = testo_visibile(testo_racconto(c)[0][1])
+        nw = len(parole(t))
+        w(f"| {c.name}, testo intero | {nw} | {fmt(per_mille(len(RE_SIMILITUDINE.findall(t)), nw))} | "
+          f"{fmt(per_mille(len(RE_COME.findall(t)), nw))} |")
+    for r in nomi:
+        t = testo_segmenti(corpus["autore"][r])
+        nw = len(parole(t))
+        w(f"| {r}, zone senza coincidenze | {nw} | {fmt(per_mille(len(RE_SIMILITUDINE.findall(t)), nw))} | "
+          f"{fmt(per_mille(len(RE_COME.findall(t)), nw))} |")
+    w("")
+    w("## Affidabilità per lunghezza\n")
+    w("Finestre dell'autore (lasciate fuori una alla volta) contro finestre di contrasto della stessa "
+      "lunghezza. AUC: probabilità che una finestra di contrasto risulti più lontana di una dell'autore "
+      "(0,5 = la misura non distingue; 1 = separa sempre; sotto 0,5 il contrasto risulta più vicino alla "
+      "media dell'autore delle finestre dell'autore stesse) [F65]. Per i marcatori: probabilità che una "
+      "finestra di contrasto ne abbia meno. Le finestre si sovrappongono per metà: quelle indipendenti "
+      "sono circa la metà delle contate.\n")
+    w("| Parole | Finestre autore | Finestre contrasto | AUC distanza | AUC marcatori | Contrasto fuori banda |")
+    w("| ---: | ---: | ---: | ---: | ---: | ---: |")
+    for n, fa, fc, a_d, a_m, fb in affidabilita(corpus, marcatori):
+        if a_d is None:
+            w(f"| {n} | {fa} | {fc} | non abbastanza testo | | |")
+        else:
+            w(f"| {n} | {fa} | {fc} | {fmt(a_d, 2)} | {fmt(a_m, 2) if a_m is not None else '—'} | "
+              f"{percentuale(fb, 1)} |")
+    w("")
+    w("## Variazione tra racconti\n")
+    w("Finestre di un racconto lette contro la banda costruita sugli altri. Se la banda descrivesse bene "
+      "la variazione dell'autore, ne cadrebbe fuori circa il 10%: molto di più vuol dire che i racconti "
+      "differiscono fra loro più di quanto le finestre di uno solo mostrino, e conta di più il confronto "
+      "con lo stesso racconto.\n")
+    righe = variazione_tra_racconti(corpus)
+    if not righe:
+        w("Un solo racconto nel corpus: la variazione tra racconti non si misura.")
+    else:
+        w("| Racconto | Parole | Finestre | Fuori banda |")
+        w("| --- | ---: | ---: | ---: |")
+        for nome, n, nf, q in righe:
+            w(f"| {nome} | {n} | {nf} | {percentuale(q, 1) if q is not None else 'non abbastanza testo'} |")
+    w("")
+    w("## Definizioni\n")
+    w("- Parole: sequenze di lettere; frasi: divise a punto, punto esclamativo o interrogativo e puntini "
+      "seguiti da maiuscola. La narrazione esclude il testo tra caporali o virgolette e le righe di battuta.")
+    w("- ‰: occorrenze ogni mille parole del testo misurato.")
+    w("- Marcatori di voce: le espressioni di strumenti/marcatori_voce.txt, come parole intere.")
+    w(f"- Distanza: Delta di Burrows sulle {MFW} parole più frequenti del riferimento con almeno "
+      f"{MFW_MINIMO} occorrenze, senza pronomi personali né parole quasi sempre maiuscole; con almeno due "
+      f"racconti di {CULLING_PAROLE} parole, esce la parola concentrata per oltre il {int(CULLING * 100)}% in "
+      "uno solo [F58][F59].")
+    w(f"- Finestre: frasi intere consecutive fino ad almeno N parole, una ogni mezza finestra circa, senza "
+      f"attraversare stacchi di scena o frasi escluse; banda dal 5° al 95° percentile, con almeno "
+      f"{MIN_FINESTRE} finestre [F62].")
+    testo_out = "\n".join(out) + "\n"
+    print(testo_out)
+    if salva:
+        dest = salva_univoco(RADICE / "voce" / "misure", f"{oggi()}-misure.md", testo_out)
+        print(f"Salvato in {relativo(dest)}")
+
+
+# ---- deriva: finestra mobile lungo un racconto
+
+def cmd_deriva(racconto, n=FINESTRA_DERIVA):
+    cartella = cartella_racconto(racconto)
+    dati = leggi_scheda(cartella)
+    fr = frasi_racconto(cartella)
+    corpus = corpus_voce()
+    marcatori = marcatori_voce()
+    corpo = [s for segs in corpus["autore"].values() for s in segs]
+    rif = Riferimento(corpo, n)
+    origine = "corpus di voce"
+    if not rif.basta() or len(rif.delta_propri()) < MIN_FINESTRE:
+        rif = Riferimento(zona_autore(fr) if quota_racconto(fr) <= SOGLIA_INTERO else [], n)
+        origine = "zone senza coincidenze dello stesso racconto"
+    out = []
+    w = out.append
+    w(f"# Deriva: {cartella.name} ({oggi()})\n")
+    w(identita_report(cartella, dati))
+    w(f"Finestra mobile di almeno {n} parole a frasi intere, una ogni mezza finestra circa, lungo tutto il "
+      f"testo (rolling stylometry [F62]). Ogni finestra si legge contro le finestre del {origine}, "
+      "senza quelle che la toccano. Non dice chi ha scritto una finestra: dice dove la prosa esce dalla "
+      "variazione osservata (officina/stilometria.md).\n")
+    if not rif.basta() or len(rif.delta_propri()) < MIN_FINESTRE:
+        w("Non abbastanza testo di riferimento per una banda: nessun racconto consolidato con frasi "
+          "senza coincidenze, e nemmeno nel racconto stesso.")
+        print("\n".join(out))
+        return
+    propri = rif.delta_propri()
+    fs = finestre(segmenti(fr, lambda f: True), n)
+    w(f"Riferimento: {len(rif.finestre)} finestre, {len(rif.vocabolario)} parole; banda della distanza "
+      f"{fmt(quantile(propri, BANDA[0]), 2)}–{fmt(quantile(propri, BANDA[1]), 2)}.\n")
+    w("| N. | Capoversi | Parole | Coincidenza | Distanza | Posizione"
+      + (" | Marcatori ‰" if marcatori else "") + " | Più presenti / meno presenti |")
+    w("| ---: | --- | ---: | ---: | ---: | --- |" + (" ---: |" if marcatori else "") + " --- |")
+    quante_fuori = coincidenti_fuori = 0
+    for i, f in enumerate(fs, 1):
+        d = rif.delta_di(f["testo"], f["chiave"])
+        if d is None:
+            continue
+        b = banda(propri, d)
+        coinc = sum(x["parole"] * x["quota"] for x in f["frasi"]) / f["parole"]
+        if oltre(b[0]):
+            quante_fuori += 1
+            coincidenti_fuori += coinc >= 0.5
+        eccesso, mancanti = rif.spiega(f["testo"], 3)
+        cap = f"{f['frasi'][0]['capoverso']}–{f['frasi'][-1]['capoverso']}"
+        segno = f"**{b[0]}**" if oltre(b[0]) else b[0]
+        marc = (f" | {fmt(per_mille(conta_marcatori(f['testo'], marcatori), f['parole']))}"
+                if marcatori else "")
+        spieg = (", ".join(x[1] for x in eccesso) or "—") + " / " + (", ".join(x[1] for x in mancanti) or "—")
+        w(f"| {i} | {cap} | {f['parole']} | {percentuale(coinc, 1)} | {fmt(d, 2)} | {segno}{marc} | {spieg} |")
+    w("")
+    w(f"Finestre oltre la banda: {quante_fuori} su {len(fs)}, di cui {coincidenti_fuori} in zone coincidenti "
+      "per metà o più. Sotto la banda vuol dire più vicina alla media delle finestre dell'autore: non si conta. "
+      "Oltre la banda in una zona dell'autore è variazione da rispettare, salvo un effetto diverso "
+      "dall'intenzione; quanto la misura distingue a questa lunghezza lo dice `prosa.py voce`.")
+    print("\n".join(out))
 
 
 RE_DASH_INIZIO = re.compile(r"^\s*(?:\\)?[—–-]\s?")
@@ -1603,7 +2380,7 @@ def misura_provenienza(cartella, materiali):
         per_capoverso[capoverso_di[i]] = (tot + 1, coin + bool(c))
     contributi = [sum(1 for c in coperte if k in c) for k in range(len(materiali))]
     return {"totale": totale, "coincidenti": coincidenti, "blocchi": blocchi,
-            "per_capoverso": per_capoverso, "contributi": contributi}
+            "per_capoverso": per_capoverso, "contributi": contributi, "coperte": coperte}
 
 
 def percentuale(parte, tutto):
@@ -1800,6 +2577,8 @@ def main(argv):
                         "il revisionId acquisito insieme al testo, senza spazi né backtick")
     battute = opzione(args, cmd, "--battute", "tappe", r"[1-9]\d{2,5}",
                       "un numero intero di battute, almeno 100")
+    finestra = opzione(args, cmd, "--finestra", "deriva", r"[1-9]\d{1,4}",
+                       "un numero intero di parole, almeno 10")
     comandi = {
         "fonte": (cmd_fonte, 1),
         "nuovo": (cmd_nuovo, 1), "importa": (cmd_importa, 2), "conta": (cmd_conta, 1),
@@ -1810,6 +2589,8 @@ def main(argv):
         "nome-libero": (cmd_nome_libero, 1), "differenze": (cmd_differenze, 2),
         "provenienza": (lambda r, *m: cmd_provenienza(r, *m, salva=salva), None),
         "tappe": (lambda r: cmd_tappe(r, int(battute) if battute else BATTUTE_TAPPA), 1),
+        "voce": (lambda: cmd_voce(salva), 0),
+        "deriva": (lambda r: cmd_deriva(r, int(finestra) if finestra else FINESTRA_DERIVA), 1),
     }
     if cmd == "esporta":
         print("«esporta» arriverà nella fase 2: impaginazione secondo il bando.")

@@ -33,7 +33,7 @@ Scrittura e calibrazione della voce richiedono invocazioni esplicite. Non calibr
 
 ## Impostazioni personali
 
-`strumenti/prepara.py` crea i file locali di `voce/` e `strumenti/stilemi_extra.txt`. Eseguirlo nuovamente non sovrascrive le impostazioni. Le formule aggiuntive sono espressioni regolari Python: il comando segnala quelle non valide. Le scelte editoriali personali si salvano in `voce/scelte-redazionali.md`; le deroghe di un racconto nella sua scheda.
+`strumenti/prepara.py` crea i file locali di `voce/`, `strumenti/stilemi_extra.txt` e `strumenti/marcatori_voce.txt`. Eseguirlo nuovamente non sovrascrive le impostazioni. Le formule aggiuntive sono espressioni regolari Python: il comando segnala quelle non valide. Le scelte editoriali personali si salvano in `voce/scelte-redazionali.md`; le deroghe di un racconto nella sua scheda.
 
 ## Prove manuali delle skill
 

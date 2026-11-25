@@ -22,6 +22,7 @@ Leggi alla velocità di un lettore, non per cercare errori: ascolta dove la pros
 - **Ridondanza**: il testo fa il lavoro e poi una frase spiega cosa ha fatto. È il difetto di riga più comune nella prosa generata.
 - **Formule**: le formule di repertorio e i tic del report, lette nel contesto: alcune sono scelte.
 - **Echi e ricorrenze**: dal report di `prosa.py`, escluse le parole che la scheda dichiara ricorrenti. La direzione è togliere o ricostruire la frase, non cercare un sinonimo: la sinonimia elegante cambia registro (`officina/lessico-e-figure.md`).
+- **Voce misurata**: `python -X utf8 strumenti/prosa.py deriva <nome>` fa scorrere una finestra lungo il racconto e la legge contro le finestre dei testi dell'autore (`officina/stilometria.md`). Rileggi per prime le finestre oltre la banda in zone che coincidono con materiali dell'assistente, guardando i marcatori di voce e le parole meno presenti del solito. Oltre la banda in una zona dell'autore è variazione da rispettare, salvo un effetto diverso dall'intenzione. Il report indica i luoghi da rileggere, non la diagnosi; la direzione resta quella di questo livello, mai «riportare il numero nella banda».
 - **Tavola LAMP** (`officina/difetti-ai.md`, parte 4 [F38]): passa le sette categorie come lista di controllo. Ogni segnalazione è un candidato da leggere nel contesto, come quelle dello script.
 
 ## Nel report
