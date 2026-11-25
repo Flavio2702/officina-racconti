@@ -100,7 +100,7 @@ flowchart LR
 
 **Un solo insieme di skill.** I rimandi per Claude Code puntano alle stesse istruzioni usate da Codex; i test ne controllano l'allineamento.
 
-**Le misure di voce descrivono, non attribuiscono.** `confronta`, `deriva` e `voce` leggono un passaggio contro la variazione dei testi dell'autore su pezzi della stessa lunghezza: il racconto stesso e i racconti consolidati, solo nelle frasi senza coincidenze con i materiali dell'assistente. Non c'è un valore da raggiungere; metodo, limiti e calibrazione sono in [officina/stilometria.md](officina/stilometria.md). Senza racconti consolidati il corpus è vuoto e i comandi lo dicono; i marcatori di voce si scrivono in `strumenti/marcatori_voce.txt`, creato vuoto da `prepara.py`.
+**Le misure di voce descrivono, non attribuiscono.** `confronta`, `deriva` e `voce` leggono un passaggio contro la variazione dei testi dell'autore su pezzi della stessa lunghezza: il racconto stesso e i racconti consolidati, solo nelle frasi senza coincidenze con i materiali dell'assistente. Non c'è un valore da raggiungere; metodo, limiti e calibrazione sono in [officina/stilometria.md](officina/stilometria.md). Senza racconti consolidati il corpus è vuoto e i comandi lo dicono; i marcatori di voce si scrivono in `strumenti/marcatori_voce.txt`, creato vuoto da `prepara.py`. Con `voce_testo_intero: sì` nella scheda dichiari tuo l'intero testo di un racconto, anche le frasi che coincidono con i materiali: le misure lo usano tutto.
 
 ## I tuoi testi restano fuori dal repository
 

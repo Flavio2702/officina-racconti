@@ -1617,6 +1617,37 @@ class VoceTest(unittest.TestCase):
             self.cattura(prosa.main, ["prosa.py", "conta", str(c), "--finestra", "20"])
         self.assertIn("solo con «deriva»", err.getvalue())
 
+    def test_testo_intero_dichiarato_entra_nel_corpus_e_non_nel_contrasto(self):
+        testo = prosa_sintetica(12, 40) + "\n\n" + self.MATERIALE + "\n"
+        c = self.racconto("dichiarato", testo, materiali=[self.MATERIALE, testo])
+        self.assertEqual([r for r, _ in prosa.corpus_voce()["esclusi"]], ["dichiarato"])
+        scheda = c / "scheda.md"
+        scheda.write_text(scheda.read_text(encoding="utf-8").replace(
+            "modalita: breve\n", "modalita: breve\nvoce_testo_intero: sì # lo dichiaro mio\n"), encoding="utf-8")
+        corpus = prosa.corpus_voce()
+        self.assertEqual(corpus["esclusi"], [])
+        self.assertEqual(corpus["dichiarati"], ["dichiarato"])
+        self.assertEqual(corpus["contrasto"], {})
+        self.assertIn("lampada", prosa.testo_segmenti(corpus["autore"]["dichiarato"]))
+        report = self.cattura(prosa.cmd_voce)
+        self.assertIn("dichiarato: testo intero dichiarato dall'autore", report)
+        passaggio = self.radice / "passaggio.md"
+        passaggio.write_text("Una barca rossa scivola lenta sul lago grigio.", encoding="utf-8")
+        confronto = self.cattura(prosa.cmd_confronta, str(passaggio), str(c))
+        self.assertIn(f"Stesso racconto: {len(prosa.parole(testo))} parole, testo intero dichiarato", confronto)
+        self.assertIn("testo intero dichiarato dall'autore: dichiarato", confronto)
+
+    def test_voce_testo_intero_valori_ammessi(self):
+        c = self.racconto("valori", "Testo.\n")
+        scheda = c / "scheda.md"
+        for valore, atteso in (("sì", True), ("si", True), ("no", False), ("", False)):
+            scheda.write_text(f"---\nstato: consolidato\nvoce_testo_intero: {valore}\n---\n", encoding="utf-8")
+            self.assertEqual(prosa.testo_intero_dichiarato(c), atteso)
+        scheda.write_text("---\nvoce_testo_intero: tutto\n---\n", encoding="utf-8")
+        with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
+            prosa.testo_intero_dichiarato(c)
+        self.assertIn("voce_testo_intero non supportato", err.getvalue())
+
     def test_deriva_senza_corpus_usa_le_zone_del_racconto(self):
         c = self.racconto("bozza", prosa_sintetica(11, 150) + "\n", stato="stesura")
         report = self.cattura(prosa.cmd_deriva, str(c), 20)

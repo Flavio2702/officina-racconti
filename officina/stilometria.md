@@ -30,7 +30,7 @@ Per la distanza, la banda viene dalle finestre dell'autore lette contro le altre
 ## Il riferimento: stesso racconto prima del corpus
 
 - **Stesso racconto**: le frasi del racconto senza coincidenze con i materiali dell'assistente, senza il passaggio stesso.
-- **Corpus di voce**: i racconti con `stato: consolidato`, solo le frasi senza coincidenze. La coincidenza è quella di `provenienza` (sequenze di otto parole), riportata alla frase. Un racconto che coincide oltre il 90% si esclude: di solito vuol dire che un materiale lo riporta per intero, e la coincidenza non distingue più niente.
+- **Corpus di voce**: i racconti con `stato: consolidato`, solo le frasi senza coincidenze. La coincidenza è quella di `provenienza` (sequenze di otto parole), riportata alla frase. Un racconto che coincide oltre il 90% si esclude: di solito vuol dire che un materiale lo riporta per intero, e la coincidenza non distingue più niente. Con `voce_testo_intero: sì` nella scheda, l'autore dichiara suo l'intero testo, comprese le frasi nate da lucidature che ha tenuto: tutte le frasi valgono come testo dell'autore, anche nella colonna dello stesso racconto, e nessuna entra nel contrasto. I report lo dichiarano.
 - **Contrasto**: le frasi coincidenti per metà o più, di tutti i racconti. Serve solo a misurare l'affidabilità, mai come riferimento. È testo coincidente, non testo dell'assistente: può contenere frasi dell'autore citate in un materiale.
 
 La colonna dello stesso racconto vale di più. I racconti di uno stesso autore possono differire molto fra loro, per esempio nella lunghezza delle frasi, e una banda costruita su un racconto può descriverne male un altro (vedi sotto).

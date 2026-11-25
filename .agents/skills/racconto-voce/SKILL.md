@@ -25,6 +25,7 @@ Il profilo descrive come scrive l'autore in generale, non come è scritto un rac
 - Leggi la tabella di **affidabilità**: una misura che non distingue a una data lunghezza non regge un tratto. Leggi anche la **variazione tra racconti**: se un racconto esce dalla banda degli altri, la differenza è del racconto o del narratore, e il tratto va descritto come intervallo, non come valore medio.
 - Con `--salva` il report va in `voce/misure/`; citane il percorso nello **Storico**.
 - I marcatori di `strumenti/marcatori_voce.txt` raccolgono parole ed espressioni prese dalle prove del profilo, per esempio i connettivi del parlato. Se il profilo cambia, proponi all'autore anche il file aggiornato.
+- Un racconto in cui l'autore dichiara suo tutto il testo, comprese le frasi nate da materiali dell'assistente che ha tenuto, ha `voce_testo_intero: sì` nella scheda: le misure lo usano per intero. Il campo lo imposta solo una dichiarazione dell'autore, registrata nello **Storico** e nello stato del racconto.
 
 ### Il filtro: stile o racconto?
 

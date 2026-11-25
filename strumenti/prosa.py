@@ -380,6 +380,11 @@ def leggi_scheda(cartella, campi=None):
         if dati["scrittura_assistita"] not in ("sì", "si", "no", ""):
             errore("scrittura_assistita non supportata: usare sì, si, no o lasciare vuoto; "
                    "le note vanno nel commento")
+    if "voce_testo_intero" in dati:
+        dati["voce_testo_intero"] = unicodedata.normalize("NFC", dati["voce_testo_intero"])
+        if dati["voce_testo_intero"] not in ("sì", "si", "no", ""):
+            errore("voce_testo_intero non supportato: usare sì, si, no o lasciare vuoto; "
+                   "le note vanno nel commento")
     if "ia_bando" in dati:
         dati["ia_bando"] = " ".join(unicodedata.normalize("NFC", dati["ia_bando"]).split())
         if dati["ia_bando"] not in ("vietata", "ammessa", "da verificare", ""):
@@ -1365,6 +1370,26 @@ def consolidato(cartella):
     return leggi_scheda(cartella, {"stato"}).get("stato") == "consolidato"
 
 
+def testo_intero_dichiarato(cartella):
+    """voce_testo_intero: sì nella scheda: l'autore dichiara suo l'intero testo, comprese le frasi
+    che coincidono con i materiali dell'assistente (per esempio una lucidatura che ha tenuto)."""
+    return leggi_scheda(cartella, {"voce_testo_intero"}).get("voce_testo_intero") in ("sì", "si")
+
+
+DICHIARATO = "testo intero dichiarato dall'autore (voce_testo_intero nella scheda)"
+
+
+def zona_riferimento(cartella, frasi_):
+    """Le frasi del racconto che valgono come testo dell'autore, e come descriverle nei report."""
+    if testo_intero_dichiarato(cartella):
+        return segmenti(frasi_, lambda f: True), DICHIARATO
+    quota = quota_racconto(frasi_)
+    if quota > SOGLIA_INTERO:
+        return [], (f"coincide per il {percentuale(quota, 1)} con i materiali: probabile materiale che "
+                    "riporta il testo intero")
+    return zona_autore(frasi_), "frasi senza coincidenze con i materiali"
+
+
 def racconti_consolidati():
     return [c for c in racconti_con_testo() if consolidato(c)]
 
@@ -1375,19 +1400,23 @@ def corpus_voce():
     Il contrasto sono le frasi coincidenti per metà o più, di ogni racconto: servono a misurare
     l'affidabilità, mai come riferimento. Un racconto coincidente oltre SOGLIA_INTERO si esclude
     da entrambi: di solito un materiale lo riporta per intero, e la coincidenza non distingue più.
+    Con voce_testo_intero: sì l'autore dichiara suo l'intero testo: tutte le frasi entrano nella
+    zona dell'autore e nessuna nel contrasto.
     """
-    corpus = {"autore": {}, "contrasto": {}, "esclusi": []}
+    corpus = {"autore": {}, "contrasto": {}, "esclusi": [], "dichiarati": []}
     for c in racconti_con_testo():
         fr = frasi_racconto(c)
-        quota = quota_racconto(fr)
-        if quota > SOGLIA_INTERO:
-            corpus["esclusi"].append((c.name, f"coincide per il {percentuale(quota, 1)} con i materiali: "
-                                      "probabile materiale che riporta il testo intero"))
-            continue
-        if consolidato(c):
-            autore = zona_autore(fr)
-            if autore:
+        autore, descrizione = zona_riferimento(c, fr)
+        if descrizione == DICHIARATO:
+            if consolidato(c) and autore:
                 corpus["autore"][c.name] = autore
+                corpus["dichiarati"].append(c.name)
+            continue
+        if not autore and quota_racconto(fr) > SOGLIA_INTERO:
+            corpus["esclusi"].append((c.name, descrizione))
+            continue
+        if consolidato(c) and autore:
+            corpus["autore"][c.name] = autore
         contrasto = zona_contrasto(fr)
         if contrasto:
             corpus["contrasto"][c.name] = contrasto
@@ -1623,8 +1652,8 @@ def cmd_confronta(passaggio, racconto):
     a = profilo_testo(nuovo, marcatori)
     n = len(parole(nuovo))
     fr = frasi_racconto(cartella)
-    quota = quota_racconto(fr)
-    stesso = senza(zona_autore(fr), nuovo) if quota <= SOGLIA_INTERO else []
+    stesso, descrizione = zona_riferimento(cartella, fr)
+    stesso = senza(stesso, nuovo)
     corpus = corpus_voce()
     corpo = senza([s for segs in corpus["autore"].values() for s in segs], nuovo)
     brani = brani_esempi()
@@ -1636,14 +1665,18 @@ def cmd_confronta(passaggio, racconto):
       "correggere: non c'è un valore da raggiungere, e la misura non dice chi ha scritto il testo "
       "(officina/stilometria.md).\n")
     w(f"- Passaggio: {n} parole.")
-    if quota > SOGLIA_INTERO:
-        w(f"- Stesso racconto: coincide per il {percentuale(quota, 1)} con i materiali dell'assistente; "
-          "nessuna zona di riferimento.")
+    if not stesso and descrizione.startswith("coincide"):
+        w(f"- Stesso racconto: {descrizione}; nessuna zona di riferimento.")
+    elif descrizione == DICHIARATO:
+        w(f"- Stesso racconto: {parole_segmenti(stesso)} parole, {descrizione} "
+          "(le frasi del passaggio sono tolte).")
     else:
         w(f"- Stesso racconto: {parole_segmenti(stesso)} parole senza coincidenze con i materiali "
           "(le frasi del passaggio sono tolte).")
     w(f"- Corpus di voce: {parole_segmenti(corpo)} parole da {len(corpus['autore'])} racconti consolidati"
       + (f"; esclusi: {'; '.join(f'{r} ({m})' for r, m in corpus['esclusi'])}" if corpus["esclusi"] else "")
+      + (f"; testo intero dichiarato dall'autore: {', '.join(corpus['dichiarati'])}"
+         if corpus["dichiarati"] else "")
       + ".")
     if not marcatori:
         w("- Marcatori di voce: strumenti/marcatori_voce.txt è vuoto o assente; non contati.")
@@ -1786,7 +1819,8 @@ def cmd_voce(salva=False):
     w("- Misure descrittive dei testi dell'autore. Non attribuiscono un testo e non dicono se è buono "
       "(officina/stilometria.md).")
     w("- Corpus: racconti con `stato: consolidato`; contano solo le frasi senza coincidenze con i materiali "
-      f"marcati dell'assistente (sequenze di {SEQUENZA_PROVENIENZA} parole, come «provenienza»).")
+      f"marcati dell'assistente (sequenze di {SEQUENZA_PROVENIENZA} parole, come «provenienza»), salvo "
+      "i racconti con `voce_testo_intero: sì` nella scheda, che contano per intero.")
     w("- Contrasto, solo per l'affidabilità e mai come riferimento: le frasi coincidenti per metà o più, di "
       "tutti i racconti. È testo coincidente, non testo dell'assistente: può contenere frasi dell'autore "
       "citate in un materiale (allora la separazione misurata è prudente) e può differire per forma, per "
@@ -1796,6 +1830,9 @@ def cmd_voce(salva=False):
             f"{r} {parole_segmenti(s)} parole" for r, s in corpus["contrasto"].items()) + ".")
     for r, m in corpus["esclusi"]:
         w(f"- Escluso: {r}, {m}.")
+    for r in corpus["dichiarati"]:
+        w(f"- {r}: {DICHIARATO}; tutte le frasi valgono come testo dell'autore, anche quelle coincidenti "
+          "con i materiali, e nessuna entra nel contrasto.")
     if not marcatori:
         w("- strumenti/marcatori_voce.txt è vuoto o assente: i marcatori di voce non si contano.")
     w("")
@@ -1893,8 +1930,10 @@ def cmd_deriva(racconto, n=FINESTRA_DERIVA):
     rif = Riferimento(corpo, n)
     origine = "del corpus di voce"
     if not rif.basta() or len(rif.delta_propri()) < MIN_FINESTRE:
-        rif = Riferimento(zona_autore(fr) if quota_racconto(fr) <= SOGLIA_INTERO else [], n)
-        origine = "delle zone senza coincidenze dello stesso racconto"
+        zona, descrizione = zona_riferimento(cartella, fr)
+        rif = Riferimento(zona, n)
+        origine = ("dello stesso racconto, " + DICHIARATO if descrizione == DICHIARATO
+                   else "delle zone senza coincidenze dello stesso racconto")
     out = []
     w = out.append
     w(f"# Deriva: {cartella.name} ({oggi()})\n")
