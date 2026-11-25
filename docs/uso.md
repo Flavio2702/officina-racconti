@@ -13,6 +13,11 @@ Esegui i comandi dalla radice del progetto. `python -X utf8 strumenti/prosa.py a
 | `intestazione il-faro` | Fonte dichiarata, data e impronta della copia |
 | `differenze il-faro <sha>` | Confronto con una copia conservata da una precedente importazione |
 | `provenienza il-faro` | Coincidenze con materiali marcati come prosa dell'assistente |
+| `confronta passaggio.md il-faro` | Misure di un passaggio collocate nella variazione del racconto e del corpus di voce |
+| `deriva il-faro --finestra 100` | Finestra mobile lungo il racconto, contro le finestre dei testi dell'autore |
+| `voce --salva` | Misure riproducibili dei racconti consolidati e loro affidabilità per lunghezza |
+
+Le misure di voce partono dai racconti con `stato: consolidato` e usano solo le frasi senza coincidenze con i materiali dell'assistente; con l'esempio, che non è consolidato, il riferimento è il racconto stesso, e sotto le otto finestre il report dice che il testo non basta. Metodo e limiti: [officina/stilometria.md](../officina/stilometria.md).
 
 `importa` aggiorna `testo.md`, conserva una copia per impronta e rigenera o invalida i derivati. Non modifica il file originale. Per provare versioni diverse, usa una fonte in `bozze/` e aggiornane il percorso nella scheda. Non modificare `testo.md` a mano.
 
@@ -33,7 +38,7 @@ Scrittura e calibrazione della voce richiedono invocazioni esplicite. Non calibr
 
 ## Impostazioni personali
 
-`strumenti/prepara.py` crea i file locali di `voce/`, `strumenti/stilemi_extra.txt` e `strumenti/marcatori_voce.txt`. Eseguirlo nuovamente non sovrascrive le impostazioni. Le formule aggiuntive sono espressioni regolari Python: il comando segnala quelle non valide. Le scelte editoriali personali si salvano in `voce/scelte-redazionali.md`; le deroghe di un racconto nella sua scheda.
+`strumenti/prepara.py` crea i file locali di `voce/`, `strumenti/stilemi_extra.txt` e `strumenti/marcatori_voce.txt`. Eseguirlo nuovamente non sovrascrive le impostazioni. Le formule aggiuntive e i marcatori di voce sono espressioni regolari Python, una per riga: i comandi segnalano quelle non valide. I marcatori sono parole o espressioni tipiche del tuo narratore, prese dalle prove del profilo, che `confronta`, `deriva` e `voce` contano; il file parte vuoto. Le scelte editoriali personali si salvano in `voce/scelte-redazionali.md`; le deroghe di un racconto nella sua scheda.
 
 ## Prove manuali delle skill
 

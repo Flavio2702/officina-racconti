@@ -15,7 +15,8 @@ Porti una bozza. L'officina organizza le scelte, accompagna la revisione e conse
 - **Revisionare con un obiettivo:** struttura, scena, riga, redazione o bozze; un livello per volta.
 - **Ottenere una lettura a freddo:** seguire aspettative e reazioni di un lettore simulato, prima che conosca le tue intenzioni.
 - **Usare l'AI per scrivere solo quando lo chiedi:** raccordi, varianti, abbozzi e lucidature hanno una skill esplicita.
-- **Controllare il testo:** parole, battute, dialoghi, ripetizioni candidate, differenze tra versioni e coincidenze con materiali dell'assistente.
+- **Controllare il testo:** parole, battute, dialoghi, ripetizioni candidate, ritmo e punteggiatura, lessico d'ufficio, accumuli di similitudini, differenze tra versioni e coincidenze con materiali dell'assistente.
+- **Vedere dove la prosa si allontana dalla tua voce:** un passaggio o un racconto intero letti contro la variazione dei tuoi testi, non contro una norma; utile soprattutto per i passaggi scritti con l'assistente.
 - **Riprendere il filo:** decisioni, proposte e prossimo passo rimangono in file leggibili, insieme alla versione esaminata.
 
 ## Provalo subito
@@ -95,19 +96,21 @@ flowchart LR
 
 **Le proposte rimangono visibili.** La revisione indica problemi e direzioni; la scrittura assistita è separata. Con fonti locali, le modifiche restano proposte che l'autore applica all'originale.
 
+**Ogni regola ha una fonte.** `officina/` raccoglie nozioni di norma e di mestiere: punteggiatura e ritmo, lessico e figure, scena, forma breve, norme redazionali, difetti tipici della prosa generata e misure di stile. Ogni indicazione rimanda a una sigla di [officina/fonti.md](officina/fonti.md), che distingue norma, mestiere, ricerca e preprint, oppure è marcata come osservazione.
+
 **Un solo insieme di skill.** I rimandi per Claude Code puntano alle stesse istruzioni usate da Codex; i test ne controllano l'allineamento.
 
 **Le misure di voce descrivono, non attribuiscono.** `confronta`, `deriva` e `voce` leggono un passaggio contro la variazione dei testi dell'autore su pezzi della stessa lunghezza: il racconto stesso e i racconti consolidati, solo nelle frasi senza coincidenze con i materiali dell'assistente. Non c'è un valore da raggiungere; metodo, limiti e calibrazione sono in [officina/stilometria.md](officina/stilometria.md). Senza racconti consolidati il corpus è vuoto e i comandi lo dicono; i marcatori di voce si scrivono in `strumenti/marcatori_voce.txt`, creato vuoto da `prepara.py`.
 
 ## I tuoi testi restano fuori dal repository
 
-`racconti/` (tranne il modello vuoto), `bozze/`, `voce/` e le personalizzazioni locali sono ignorati da Git. I modelli pubblici non contengono profili personali. Salva i tuoi materiali nelle cartelle previste e controlla i file prima di ogni commit: un file personale salvato altrove non è automaticamente protetto.
+`racconti/` (tranne il modello vuoto), `bozze/`, `voce/` e le personalizzazioni locali (`strumenti/stilemi_extra.txt`, `strumenti/marcatori_voce.txt`) sono ignorati da Git. I modelli pubblici non contengono profili personali. Salva i tuoi materiali nelle cartelle previste e controlla i file prima di ogni commit: un file personale salvato altrove non è automaticamente protetto.
 
 L'esclusione da Git riguarda la pubblicazione, **non l'invio di contenuti al servizio AI** quando usi un assistente. Conserva un backup separato dei tuoi testi e non inserire contenuti riservati nelle issue.
 
 ## Limiti e verifiche
 
-Le segnalazioni linguistiche sono euristiche; la lettura simulata non predice il giudizio di una giuria. Il confronto di provenienza misura coincidenze, non certifica chi abbia scritto un testo. L'importazione DOCX conserva la prosa ordinaria e il corsivo diretto, non tutta l'impaginazione o gli stili ereditati.
+Le segnalazioni linguistiche sono euristiche; la lettura simulata non predice il giudizio di una giuria. Il confronto di provenienza misura coincidenze, non certifica chi abbia scritto un testo. Nemmeno le misure di voce attribuiscono: dicono dove un passaggio esce dalla variazione osservata, e sui passaggi brevi distinguono poco; `prosa.py voce` misura quanto, sul tuo corpus. L'importazione DOCX conserva la prosa ordinaria e il corsivo diretto, non tutta l'impaginazione o gli stili ereditati.
 
 La suite verifica gli strumenti locali, l'allineamento delle skill, l'avvio rapido e le esclusioni dei file privati. Non certifica la qualità delle risposte di un modello. Le scritture remote su Google Docs non sono collaudate in questa distribuzione.
 
