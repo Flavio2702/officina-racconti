@@ -478,9 +478,16 @@ def conta_battute(testo):
     return len(testo_visibile(testo).replace("\n", ""))
 
 
+# Confine di frase: punto, esclamativo, interrogativo o puntini, eventualmente seguiti dalla chiusura
+# di una battuta (» ” "), poi spazio e maiuscola. La chiusura resta nella frase che chiude: se il
+# separatore la consumasse, unendo di nuovo le frasi i caporali resterebbero sbilanciati e
+# togli_dialoghi toglierebbe la narrazione fino al caporale successivo.
+RE_CONFINE_FRASE = re.compile(r"(?:(?<=[.!?…])|(?<=[.!?…][»”\"]))\s+(?=[«“\"—–\-]?\s?[A-ZÀ-Ý])")
+
+
 def frasi(testo):
     t = re.sub(r"\s+", " ", testo)
-    pezzi = re.split(r"(?<=[.!?…])[»”\"]?\s+(?=[«“\"—–\-]?\s?[A-ZÀ-Ý])", t)
+    pezzi = RE_CONFINE_FRASE.split(t)
     return [p for p in pezzi if RE_PAROLA.search(p)]
 
 
@@ -501,9 +508,6 @@ def maschera_dialoghi(testo):
     t = re.sub(r"“[^”]*”", vuota, t)
     t = re.sub(r'"[^"\n]*"', vuota, t)
     return re.sub(r"(?m)^[ \t]*(?:—|–|-)[ \t]?\S.*$", vuota, t)
-
-
-RE_CONFINE_FRASE = re.compile(r"(?<=[.!?…])[»”\"]?\s+(?=[«“\"—–\-]?\s?[A-ZÀ-Ý])")
 
 
 def frasi_posizionate(testo):

@@ -1421,6 +1421,34 @@ class VoceTest(unittest.TestCase):
                         "nuovo_capoverso": True, "stacco_prima": i == stacco_a})
         return out
 
+    # Confini di frase con le battute.
+
+    def test_frasi_conservano_la_chiusura_della_battuta(self):
+        testo = ("Lei dice: «Ti aspetto qui fino a domani.» Il tono non ammette repliche; resto. "
+                 "«Va bene!» Poi esce. Scrive “ci vediamo presto.” E spegne.")
+        attese = ["Lei dice: «Ti aspetto qui fino a domani.»", "Il tono non ammette repliche; resto.",
+                  "«Va bene!»", "Poi esce.", "Scrive “ci vediamo presto.”", "E spegne."]
+        self.assertEqual(prosa.frasi(testo), attese)
+        self.assertEqual([f for _, f in prosa.frasi_posizionate(testo)], attese)
+        for p, f in prosa.frasi_posizionate(testo):
+            self.assertEqual(testo[p:p + len(f)], f)
+        unito = " ".join(prosa.frasi(testo))
+        self.assertEqual(unito.count("«"), unito.count("»"))
+        self.assertIn("non ammette repliche; resto", prosa.togli_dialoghi(unito))
+
+    def test_corpus_voce_conserva_la_narrazione_dopo_le_battute(self):
+        testo = ("Entro in libreria e cerco uno scaffale. La commessa dice: «Prenda pure quello in fondo.» "
+                 "Il suo tono mi rassicura; sposto la scala e salgo fino al ripiano più alto… ma non trovo niente.\n\n"
+                 "«Torni domani.» Lo dice piano. Io annuisco e guardo la pioggia oltre la vetrina.\n")
+        self.racconto("r", testo)
+        corpus = prosa.corpus_voce()
+        misurato = prosa.testo_segmenti(corpus["autore"]["r"])
+        self.assertEqual(len(prosa.parole(prosa.togli_dialoghi(misurato))),
+                         len(prosa.parole(prosa.togli_dialoghi(testo))))
+        profilo = prosa.profilo_testo(misurato, [])
+        self.assertGreater(profilo["punto e virgola nella narrazione ‰"], 0)
+        self.assertGreater(profilo["puntini nella narrazione ‰"], 0)
+
     # Finestre, bande, distanze.
 
     def test_finestre_a_frasi_intere_mezzo_passo_e_stacchi(self):
